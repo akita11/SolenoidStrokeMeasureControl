@@ -2,6 +2,9 @@
 
 #define PIN_FLAG1 2
 #define PIN_FLAG2 3
+#define PIN_ADC A0
+
+uint16_t v0, v1;
 
 void setup()
 {
@@ -31,6 +34,7 @@ ISR(TIMER1_OVF_vect)
 {
 	digitalWrite(PIN_FLAG1, 1);
 	digitalWrite(PIN_FLAG1, 0);
+	v0 = analogRead(PIN_ADC);
 }
 
 // Timer1 のCompareMatchB割り込み
@@ -38,6 +42,8 @@ ISR(TIMER1_COMPB_vect)
 {
 	digitalWrite(PIN_FLAG2, 1);
 	digitalWrite(PIN_FLAG2, 0);
+	v1 = analogRead(PIN_ADC);
+	Serial.print(v0); Serial.print(","); Serial.println(v1);
 }
 
 void loop()
