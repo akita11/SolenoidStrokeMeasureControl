@@ -5,6 +5,7 @@
 #define PIN_ADC   A0
 #define PIN_PWM   9
 #define PIN_SW    4
+#define PIN_LED   13
 
 uint32_t v0, v1;
 uint8_t n = 0;
@@ -19,6 +20,7 @@ void setup()
 	pinMode(PIN_FLAG1, OUTPUT); digitalWrite(PIN_FLAG1, LOW);
 	pinMode(PIN_FLAG2, OUTPUT); digitalWrite(PIN_FLAG2, LOW);
 	pinMode(PIN_SW, INPUT_PULLUP);
+	pinMode(PIN_LED, OUTPUT); digitalWrite(PIN_LED, LOW);
 	Serial.begin(115200);
 	// setup Timer1
 	TCCR1A = _BV(COM1A1) | _BV(WGM11);			  // Ch.A: non-inverting, WGM11=1 (mode14, Fast PWM)
@@ -42,17 +44,17 @@ void setup()
 ISR(TIMER1_OVF_vect)
 {
 	delayMicroseconds(Delay);
-	PORTD |= _BV(PD2);
+//	PORTD |= _BV(PD2);
 	v0 += analogRead(PIN_ADC);
-	PORTD &= ~(_BV(PD2));
+//	PORTD &= ~(_BV(PD2));
 }
 
 // Timer1 のCompareMatchB割り込み
 ISR(TIMER1_COMPB_vect)
 {
-	PORTD |= _BV(PD3);
+//	PORTD |= _BV(PD3);
 	v1 += analogRead(PIN_ADC);
-	PORTD &= ~(_BV(PD3));
+//	PORTD &= ~(_BV(PD3));
 	n++;
 	if (n == N) {
 		n = 0;
@@ -66,6 +68,7 @@ uint8_t st = 0;
 void loop()
 {
 	if (digitalRead(PIN_SW) == LOW) {
+		st = (st + 1) % 18;
 		switch(st){
 			case 0 : Delay = 50; Ton = 1000; break;
 			case 2 : Delay = 50; Ton = 2000; break;
@@ -86,8 +89,9 @@ void loop()
 			case 15 : Delay = 100; Ton = 8000; break;
 			case 17 : Delay = 100; Ton = 9000; break;
 		}
+		if (st % 2 == 1) digitalWrite(PIN_LED, HIGH);
+		else digitalWrite(PIN_LED, LOW);
 		OCR1A = Ton * 2 - 1; // PWM Duty Cycle
-		st = (st + 1) % 18;
 		while(digitalRead(PIN_SW) == LOW) delay(10);
 	}
 }
