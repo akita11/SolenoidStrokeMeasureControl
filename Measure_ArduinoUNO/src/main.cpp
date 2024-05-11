@@ -7,15 +7,18 @@
 #define PIN_SW 4
 #define PIN_LED 13
 
-uint32_t v0, v1;
+uint32_t v0s, v1s;
+uint16_t v0, v1;
 uint8_t n = 0;
 // uint8_t N = 128;
-uint8_t N = 32;
+uint8_t N = 4;
 
 uint16_t Ton = 1000;
 uint16_t Delay = 100;
 
-int ADCvalue[9][5] = {
+#define X 9
+#define Y 5
+int ADCvalue[X][Y] = {
 	{75, 82, 101, 116, 144}, // for Ton=1, L[0], L[1], ...
 	{73, 81, 101, 116, 143}, // for Ton=2, L[0], L[1], ...
 	{68, 79, 100, 113, 143},
@@ -59,7 +62,7 @@ ISR(TIMER1_OVF_vect)
 {
 	delayMicroseconds(Delay);
 //	PORTD |= _BV(PD2);
-	v0 += analogRead(PIN_ADC);
+	v0s += analogRead(PIN_ADC);
 //	PORTD &= ~(_BV(PD2));
 }
 
@@ -67,15 +70,15 @@ ISR(TIMER1_OVF_vect)
 ISR(TIMER1_COMPB_vect)
 {
 //	PORTD |= _BV(PD3);
-	v1 += analogRead(PIN_ADC);
+	v1s += analogRead(PIN_ADC);
 //	PORTD &= ~(_BV(PD3));
 	n++;
 	if (n == N)
 	{
 		n = 0;
-		v0 /= N; v1 /= N;
-		Serial.print(v0); Serial.print(","); Serial.print(v1); Serial.print(","); Serial.println(v1 - v0);
-		v0 = 0; v1 = 0;
+		v0 = v0s / N; v1 = v1s / N;
+		//		Serial.print(v0); Serial.print(","); Serial.print(v1); Serial.print(","); Serial.println(v1 - v0);
+		v0s = 0; v1s = 0;
 	}
 }
 
@@ -142,5 +145,33 @@ void loop()
 		}
 		OCR1A = Ton * 2 - 1; // PWM Duty Cycle
 		while (digitalRead(PIN_SW) == LOW) delay(10);
+	}
+	
+	uint16_t ADC0 = v1 - v0;
+	uint8_t x, y;
+	x = 0; while(x < X - 1){
+	  if ((x+1) * 1000 <= Ton && Ton < (x+2)*1000) break;
+	  x++;
+	}
+	float x0 = (float)(x + 1);
+	float t = ((float)Ton / 1000.0 - x0);
+	float x01 = x0 + t;
+	float s;
+      
+	y = 0; while(y < Y - 1){
+	  float y01 = (1.0 - t) * (float)ADCvalue[x][y] + t * (float)ADCvalue[x+1][y];
+	  float y23 = (1.0 - t) * (float)ADCvalue[x][y+1] + t * (float)ADCvalue[x+1][y+1];
+	  s = ((float)ADC0 - y01) / (y23 - y01);
+	  if (0.0 <= s && s <= 1.0) break;
+	  y++;
+	}
+	Serial.print(ADC0);
+	Serial.print(' ');
+	if (y < Y - 1){
+	  Lint = (1 - s) * L[y] + s * L[y+1];
+	  Serial.println(Lint);
+	}
+	else{
+	  Serial.println('-');
 	}
 }
