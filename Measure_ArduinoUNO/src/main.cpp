@@ -18,7 +18,7 @@ uint16_t Delay = 100;
 
 #define X 9
 #define Y 5
-int ADCvalue[X][Y] = {
+uint16_t ADCvalue[X][Y] = {
 	{75, 82, 101, 116, 144}, // for Ton=1, L[0], L[1], ...
 	{73, 81, 101, 116, 143}, // for Ton=2, L[0], L[1], ...
 	{68, 79, 100, 113, 143},
@@ -94,9 +94,11 @@ ISR(TIMER1_COMPA_vect)
 		n = 0;
 		v0 /= N;
 		v1 /= N;
+/*
 		Serial.print(v0 * 5.0 / 1024.0);
 		Serial.print(",");
 		Serial.println(v1 * 5.0 / 1024.0);
+*/
 	}
 }
 
@@ -150,12 +152,11 @@ void loop()
 	uint16_t ADC0 = v1 - v0;
 	uint8_t x, y;
 	x = 0; while(x < X - 1){
-	  if ((x+1) * 1000 <= Ton && Ton < (x+2)*1000) break;
+	  if ((uint16_t)(x+1) * 1000 <= Ton && Ton < (uint16_t)(x+2)*1000) break;
 	  x++;
 	}
 	float x0 = (float)(x + 1);
 	float t = ((float)Ton / 1000.0 - x0);
-	float x01 = x0 + t;
 	float s;
       
 	y = 0; while(y < Y - 1){
@@ -168,6 +169,7 @@ void loop()
 	Serial.print(ADC0);
 	Serial.print(' ');
 	if (y < Y - 1){
+	  float Lint;
 	  Lint = (1 - s) * L[y] + s * L[y+1];
 	  Serial.println(Lint);
 	}
