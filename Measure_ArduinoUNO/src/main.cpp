@@ -135,7 +135,7 @@ float calc_pos(int Ton, int ADCval)
  	  Lint = L[Y - 1];
 	}
     S = (114.53 - Lint) / 11.861;
-
+/*
 	Serial.print(x);
 	Serial.print(' ');
 	Serial.print(t);
@@ -145,13 +145,14 @@ float calc_pos(int Ton, int ADCval)
 	Serial.print(s);
 	Serial.print(' ');
 	Serial.println(S);
+*/
 	return(S);
 }
 
 #define LEN_LINE 64
 char buf[LEN_LINE];
 uint8_t pBuf = 0;
-float St = 0.0;
+float St = 3.0;
 
 void loop()
 {
@@ -227,13 +228,15 @@ void loop()
 
 	float S = calc_pos(Ton, ADC0);
 	// S : Neutral = 4.0(PWM=1.0), Pushed = 0.0(PWM=9.9)
-	if (S < St)
-		if (Ton < 9900) Ton += 10;
-	else 
+	if (S > St){
+		if (Ton < 9000) Ton += 10;
+	}
+	else {
 		if (Ton > 600) Ton -= 10;
-
+	}
+	OCR1A = Ton * 2 - 1; // PWM Duty Cycle
 	Serial.print(St);
-	Serial.print(' ');
+	Serial.print(' ');4.0
 	Serial.print(S);
 	Serial.print(' ');
 	Serial.println(Ton);
