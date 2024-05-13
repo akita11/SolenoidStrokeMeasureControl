@@ -135,8 +135,23 @@ float calc_pos(int Ton, int ADCval)
  	  Lint = L[Y - 1];
 	}
     S = (114.53 - Lint) / 11.861;
+
+	Serial.print(x);
+	Serial.print(' ');
+	Serial.print(t);
+	Serial.print(' ');
+	Serial.print(y);
+	Serial.print(' ');
+	Serial.print(s);
+	Serial.print(' ');
+	Serial.println(S);
 	return(S);
 }
+
+#define LEN_LINE 64
+char buf[LEN_LINE];
+uint8_t pBuf = 0;
+float St = 0.0;
 
 void loop()
 {
@@ -190,12 +205,37 @@ void loop()
 	Serial.print(">ADC0:"); Serial.println(ADC0);
 	Serial.print(">Lint:"); Serial.println(Lint);
 	Serial.print(">S:"); Serial.println(S);
-*/
 	Serial.print(tm++);
 	Serial.print(' ');
 	Serial.print(Ton);
 	Serial.print(' ');
 	Serial.print(ADC0);
 	Serial.print(' ');
-	Serial.println(calc_pos(Ton, ADC0)););
+	Serial.println(calc_pos(Ton, ADC0));
+*/
+
+	while(Serial.available() > 0 && pBuf < LEN_LINE){
+		char c = Serial.read();
+		if (c == '\r'){
+	 		buf[pBuf] = '\0';
+			Serial.println(buf);
+			pBuf = 0;
+			St = atof(buf);
+		}
+		buf[pBuf++] = c;
+	}
+
+	float S = calc_pos(Ton, ADC0);
+	// S : Neutral = 4.0(PWM=1.0), Pushed = 0.0(PWM=9.9)
+	if (S < St)
+		if (Ton < 9900) Ton += 10;
+	else 
+		if (Ton > 600) Ton -= 10;
+
+	Serial.print(St);
+	Serial.print(' ');
+	Serial.print(S);
+	Serial.print(' ');
+	Serial.println(Ton);
 }
+
