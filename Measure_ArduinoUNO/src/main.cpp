@@ -103,6 +103,9 @@ ISR(TIMER1_COMPA_vect)
 }
 
 uint8_t st = 0;
+
+uint16_t tm = 0;
+
 void loop()
 {
 	if (digitalRead(PIN_SW) == LOW)
@@ -147,6 +150,7 @@ void loop()
 		}
 		OCR1A = Ton * 2 - 1; // PWM Duty Cycle
 		while (digitalRead(PIN_SW) == LOW) delay(10);
+		tm = 0;
 	}
 	
 	uint16_t ADC0 = v1 - v0;
@@ -166,14 +170,33 @@ void loop()
 	  if (0.0 <= s && s <= 1.0) break;
 	  y++;
 	}
-	Serial.print(ADC0);
-	Serial.print(' ');
-	if (y < Y - 1){
-	  float Lint;
+    float Lint;
+    float S;
+	if (ADC0 < ADCvalue[x][0]) Lint = L[0];
+	else if (y < Y - 1){
 	  Lint = (1 - s) * L[y] + s * L[y+1];
-	  Serial.println(Lint);
+	  // L[mH] = -11.861 x S[mm] + 114.53
 	}
 	else{
-	  Serial.println('-');
+ 	  Lint = L[Y - 1];
 	}
+    S = (114.53 - Lint) / 11.861;
+/*
+	Serial.print(">ADC0:"); Serial.println(ADC0);
+	Serial.print(">Lint:"); Serial.println(Lint);
+	Serial.print(">S:"); Serial.println(S);
+*/
+	Serial.print(tm++);
+	Serial.print(' ');
+	Serial.print(Ton);
+	Serial.print(' ');
+	Serial.print(ADC0);
+	Serial.print(' ');
+	Serial.print(x);
+	Serial.print(' ');
+	Serial.print(y);
+	Serial.print(' ');
+    Serial.print(Lint);
+	Serial.print(' ');
+	Serial.println(S);
 }

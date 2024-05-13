@@ -1,0 +1,1 @@
+move (swing, go and back) solenoid core by hand, about 1Hz, for PWM Ton of 1 - 9ms (L01 - L09), where PWM cycle = 10ms (fixed).
