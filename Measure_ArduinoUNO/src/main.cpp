@@ -106,6 +106,38 @@ uint8_t st = 0;
 
 uint16_t tm = 0;
 
+float calc_pos(int Ton, int ADCval)
+{
+	uint8_t x, y;
+	x = 0; while(x < X - 1){
+	  if ((uint16_t)(x+1) * 1000 <= Ton && Ton < (uint16_t)(x+2)*1000) break;
+	  x++;
+	}
+	float x0 = (float)(x + 1);
+	float t = ((float)Ton / 1000.0 - x0);
+	float s;
+      
+	y = 0; while(y < Y - 1){
+	  float y01 = (1.0 - t) * (float)ADCvalue[x][y] + t * (float)ADCvalue[x+1][y];
+	  float y23 = (1.0 - t) * (float)ADCvalue[x][y+1] + t * (float)ADCvalue[x+1][y+1];
+	  s = ((float)ADCval - y01) / (y23 - y01);
+	  if (0.0 <= s && s <= 1.0) break;
+	  y++;
+	}
+    float Lint;
+    float S;
+	if (ADCval < ADCvalue[x][0]) Lint = L[0];
+	else if (y < Y - 1){
+	  Lint = (1 - s) * L[y] + s * L[y+1];
+	  // L[mH] = -11.861 x S[mm] + 114.53
+	}
+	else{
+ 	  Lint = L[Y - 1];
+	}
+    S = (114.53 - Lint) / 11.861;
+	return(S);
+}
+
 void loop()
 {
 	if (digitalRead(PIN_SW) == LOW)
@@ -154,33 +186,6 @@ void loop()
 	}
 	
 	uint16_t ADC0 = v1 - v0;
-	uint8_t x, y;
-	x = 0; while(x < X - 1){
-	  if ((uint16_t)(x+1) * 1000 <= Ton && Ton < (uint16_t)(x+2)*1000) break;
-	  x++;
-	}
-	float x0 = (float)(x + 1);
-	float t = ((float)Ton / 1000.0 - x0);
-	float s;
-      
-	y = 0; while(y < Y - 1){
-	  float y01 = (1.0 - t) * (float)ADCvalue[x][y] + t * (float)ADCvalue[x+1][y];
-	  float y23 = (1.0 - t) * (float)ADCvalue[x][y+1] + t * (float)ADCvalue[x+1][y+1];
-	  s = ((float)ADC0 - y01) / (y23 - y01);
-	  if (0.0 <= s && s <= 1.0) break;
-	  y++;
-	}
-    float Lint;
-    float S;
-	if (ADC0 < ADCvalue[x][0]) Lint = L[0];
-	else if (y < Y - 1){
-	  Lint = (1 - s) * L[y] + s * L[y+1];
-	  // L[mH] = -11.861 x S[mm] + 114.53
-	}
-	else{
- 	  Lint = L[Y - 1];
-	}
-    S = (114.53 - Lint) / 11.861;
 /*
 	Serial.print(">ADC0:"); Serial.println(ADC0);
 	Serial.print(">Lint:"); Serial.println(Lint);
@@ -192,11 +197,5 @@ void loop()
 	Serial.print(' ');
 	Serial.print(ADC0);
 	Serial.print(' ');
-	Serial.print(x);
-	Serial.print(' ');
-	Serial.print(y);
-	Serial.print(' ');
-    Serial.print(Lint);
-	Serial.print(' ');
-	Serial.println(S);
+	Serial.println(calc_pos(Ton, ADC0)););
 }
