@@ -215,6 +215,7 @@ void loop()
 	Serial.println(calc_pos(Ton, ADC0));
 */
 
+	// get target position from serial [mm]
 	while(Serial.available() > 0 && pBuf < LEN_LINE){
 		char c = Serial.read();
 		if (c == '\r'){
@@ -222,6 +223,7 @@ void loop()
 			Serial.println(buf);
 			pBuf = 0;
 			St = atof(buf);
+//			tm = 0;
 		}
 		buf[pBuf++] = c;
 	}
@@ -229,6 +231,7 @@ void loop()
 	float S = calc_pos(Ton, ADC0);
 	// S : Neutral = 4.0(PWM=1.0), Pushed = 0.0(PWM=9.9)
 /*
+	// preliminary simple up/down control
 	if (S > St){
 		if (Ton < 9000) Ton += 10;
 	}
@@ -236,7 +239,7 @@ void loop()
 		if (Ton > 600) Ton -= 10;
 	}
 	*/
-#define Kp 100.0
+#define Kp 4.0
 	int16_t dTon = (uint16_t)((S - St) * Kp);
 	int16_t Ton_t = Ton + dTon;
 #define Ton_MAX 990
@@ -244,7 +247,9 @@ void loop()
 	if (Ton_t < Ton_MAX) Ton = Ton_MAX;
 	else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
 	else Ton = Ton_t;
-	OCR1A = Ton * 2 - 1; // PWM Duty Cycle
+	OCR1A = Ton * 2 - 1; // update PWM Duty Cycle
+	Serial.print(tm++);
+	Serial.print(' ');
 	Serial.print(St);
 	Serial.print(' ');
 	Serial.print(S);
