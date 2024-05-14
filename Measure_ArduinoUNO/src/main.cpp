@@ -228,16 +228,28 @@ void loop()
 
 	float S = calc_pos(Ton, ADC0);
 	// S : Neutral = 4.0(PWM=1.0), Pushed = 0.0(PWM=9.9)
+/*
 	if (S > St){
 		if (Ton < 9000) Ton += 10;
 	}
 	else {
 		if (Ton > 600) Ton -= 10;
 	}
+	*/
+#define Kp 100.0
+	int16_t dTon = (uint16_t)((S - St) * Kp);
+	int16_t Ton_t = Ton + dTon;
+#define Ton_MAX 990
+#define Ton_MIN 100
+	if (Ton_t < Ton_MAX) Ton = Ton_MAX;
+	else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
+	else Ton = Ton_t;
 	OCR1A = Ton * 2 - 1; // PWM Duty Cycle
 	Serial.print(St);
-	Serial.print(' ');4.0
+	Serial.print(' ');
 	Serial.print(S);
+	Serial.print(' ');
+	Serial.print(dTon);
 	Serial.print(' ');
 	Serial.println(Ton);
 }
