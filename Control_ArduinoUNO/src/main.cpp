@@ -7,7 +7,7 @@
 #define PIN_SW 4
 #define PIN_LED 13
 
-uint16_t v0, v1;
+uint16_t v0, v0_, v1;
 
 uint16_t Ton = 1000;
 uint16_t Delay = 100;
@@ -79,7 +79,7 @@ ISR(TIMER1_OVF_vect)
 {
 	delayMicroseconds(Delay);
 //	PORTD |= _BV(PD2);
-	v0 = analogRead(PIN_ADC);
+	v0_ = analogRead(PIN_ADC);
 //	PORTD &= ~(_BV(PD2));
 }
 
@@ -88,10 +88,9 @@ ISR(TIMER1_COMPB_vect)
 {
 //	PORTD |= _BV(PD3);
 	v1 = analogRead(PIN_ADC);
+	v0 = v0_
 //	PORTD &= ~(_BV(PD3));
 }
-
-uint8_t st = 0;
 
 uint16_t tm = 0;
 
@@ -132,7 +131,7 @@ float calc_pos(int Ton, int ADCval)
 	// L[mH] = -0.823 * S[mm] + 118.3
     S = (118.3 - Lint) / 0.823;
 */
-    float Pos_int;
+	float Pos_int;
 	if (ADCval < ADCvalue[x][0]) Pos_int = Pos[0];
 	else if (y < Y - 1){
 	  Pos_int = (1 - s) * Pos[y] + s * Pos[y+1];
