@@ -24,9 +24,10 @@
 
 #define BM_INT_TIMER0_TEZ (1 << 3)
 #define BM_INT_OP0_TEA    (1 << 15)
+#define BM_INT_OP0_TEB    (1 << 18)
 
-#define PIN_FLAG1 32
-#define PIN_FLAG2 22
+#define PIN_FLAG1 22
+#define PIN_FLAG2 2
 
 void IRAM_ATTR isr_handler(void *XX)
 {
@@ -35,8 +36,8 @@ void IRAM_ATTR isr_handler(void *XX)
     digitalWrite(PIN_FLAG1, 1);
     digitalWrite(PIN_FLAG1, 0);
   }
-  if (MCPWM0.int_st.val & BM_INT_OP0_TEA){
-    // interrupt of Timer0 == REGA
+  if (MCPWM0.int_st.val & BM_INT_OP0_TEB){
+    // interrupt of Timer0 == REGB
     digitalWrite(PIN_FLAG2, 1);
     digitalWrite(PIN_FLAG2, 0);
   }
@@ -47,7 +48,7 @@ void IRAM_ATTR isr_handler(void *XX)
 void setup() {
   pinMode(PIN_FLAG1, OUTPUT); digitalWrite(PIN_FLAG1, 0);
   pinMode(PIN_FLAG2, OUTPUT); digitalWrite(PIN_FLAG2, 0);
-  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, GPIO_NUM_33);
+  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, GPIO_NUM_21);
 
   mcpwm_config_t pwm_config;
   pwm_config.frequency = 10*1000; // 10kHz,
@@ -57,11 +58,11 @@ void setup() {
   pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // active high
   mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,  &pwm_config);
 
-  mcpwm_set_signal_low(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A);
   mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 10);
+  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 50);
 
   MCPWM0.int_ena.val |= BM_INT_TIMER0_TEZ;
-  MCPWM0.int_ena.val |= BM_INT_OP0_TEA;
+  MCPWM0.int_ena.val |= BM_INT_OP0_TEB;
   ESP_ERROR_CHECK(mcpwm_isr_register(MCPWM_UNIT_0, isr_handler, NULL, ESP_INTR_FLAG_IRAM, NULL));
 }
 
