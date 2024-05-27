@@ -7,20 +7,16 @@
 #define PIN_SW 4
 #define PIN_LED 13
 
-uint32_t v0s, v1s;
 uint16_t v0, v1;
-uint8_t n = 0;
-//uint8_t N = 128;
-//uint8_t N = 1;
-uint8_t N = 16;
 
 uint16_t Ton = 1000;
 uint16_t Delay = 100;
 
+// for CDS0730
 /*
-// for CDS043
+// (1st)
 #define X 9
-#define Y 5
+#define Y 6
 uint16_t ADCvalue[X][Y] = {
 	{75, 82, 101, 116, 144}, // for Ton=1, L[0], L[1], ...
 	{73, 81, 101, 116, 143}, // for Ton=2, L[0], L[1], ...
@@ -33,26 +29,27 @@ uint16_t ADCvalue[X][Y] = {
 	{38, 42, 53, 61, 87}
 };
 float L[] = {123.3, 111.5, 94.43, 86.33, 65.3};
+	// for CDS043 (1st)
+    // L[mH] = -11.861 * S[mm] + 114.53
+    //S = (114.53 - Lint) / 11.861;
 */
 
-// for LongStroke
+// (2nd)
 #define X 9
-#define Y 2
+#define Y 6
 uint16_t ADCvalue[X][Y] = {
-{23, 42},
-{25, 40},
-{27, 38},
-{31, 35},
-{37, 33},
-{38, 29},
-{38, 27},
-{35, 23},
-{29, 18}
+{73, 85, 99, 113, 133, 149},
+{72, 84, 99, 113, 133, 148},
+{69, 82, 98, 112, 132, 147},
+{65, 78, 95, 112, 133, 147},
+{61, 74, 91, 108, 132, 147},
+{58, 69, 86, 103, 128, 146},
+{53, 63, 78, 94, 120, 139},
+{47, 55, 67, 82, 105, 123},
+{39, 43, 50, 60, 78, 94}
 };
-//float L[] = {89.5, 118.3};
-float L[] = {118.3, 89.5};
 
-// Ton = {1, 2, 3, 4, 5, 6, 7, 8, 9}
+float Pos[] = {0, 1.03, 2.13, 3.02, 4.1, 4.87};
 
 void setup()
 {
@@ -70,12 +67,10 @@ void setup()
 	ICR1 = 19999;		 // 2MHz/20000=100Hz(10ms) / TOP
 	OCR1A = Ton * 2 - 1; // PWM Duty Cycle
 	OCR1B = 999;		 // 2MHz/1000=2kHz / 0.5ms
-//	OCR1B = 1799;		 // 2MHz/1800=1.111kHz / 0.9ms
 
 	// enable interrupts
 	TIMSK1 |= _BV(TOIE1);  // enable Timer1 OVF interrupt (=PWM ON)
 	TIMSK1 |= _BV(OCIE1B); // enable Timer1 COMPB interrupt
-    //TIMSK1 |= _BV(OCIE1A); // enable Timer1 COMPA interrupt (=PWM OFF)
 	sei();				   // enable global interrupt
 }
 
@@ -83,51 +78,22 @@ void setup()
 ISR(TIMER1_OVF_vect)
 {
 	delayMicroseconds(Delay);
-	PORTD |= _BV(PD2);
-	v0s += analogRead(PIN_ADC);
-	PORTD &= ~(_BV(PD2));
+//	PORTD |= _BV(PD2);
+	v0 = analogRead(PIN_ADC);
+//	PORTD &= ~(_BV(PD2));
 }
 
 // Timer1 のCompareMatchB割り込み
 ISR(TIMER1_COMPB_vect)
 {
-	PORTD |= _BV(PD3);
-	v1s += analogRead(PIN_ADC);
-	PORTD &= ~(_BV(PD3));
-	n++;
-	if (n == N)
-	{
-		n = 0;
-		v0 = v0s / N; v1 = v1s / N;
-//		Serial.print(v0); Serial.print(","); Serial.print(v1); Serial.print(","); Serial.println(v1 - v0);
-		v0s = 0; v1s = 0;
-	}
-}
-
-// Timer1 のCompareMatchA割り込み(=PWM OFF)
-ISR(TIMER1_COMPA_vect)
-{
-	PORTD |= _BV(PD3);
-	v1 += analogRead(PIN_ADC);
-	PORTD &= ~(_BV(PD3));
-	n++;
-	if (n == N)
-	{
-		n = 0;
-		v0 /= N;
-		v1 /= N;
-/*
-		Serial.print(v0 * 5.0 / 1024.0);
-		Serial.print(",");
-		Serial.println(v1 * 5.0 / 1024.0);
-*/
-	}
+//	PORTD |= _BV(PD3);
+	v1 = analogRead(PIN_ADC);
+//	PORTD &= ~(_BV(PD3));
 }
 
 uint8_t st = 0;
 
 uint16_t tm = 0;
-
 
 float calc_pos(int Ton, int ADCval)
 {
@@ -141,14 +107,16 @@ float calc_pos(int Ton, int ADCval)
 	if (t < 0.0) t = 0.0;
 	else if (t > 1.0) t = 1.0;
 	float s;
-      	y = 0; while(y < Y - 1){
-	  float y01 = (1.0 - t) * (float)ADCvalue[x][y] + t * (float)ADCvalue[x+1][y];
-	  float y23 = (1.0 - t) * (float)ADCvalue[x][y+1] + t * (float)ADCvalue[x+1][y+1];
-	  s = ((float)ADCval - y01) / (y23 - y01);
-	  if (0.0 <= s && s <= 1.0) break;
-	  y++;
+    y = 0; while(y < Y - 1){
+		float y01 = (1.0 - t) * (float)ADCvalue[x][y] + t * (float)ADCvalue[x+1][y];
+		float y23 = (1.0 - t) * (float)ADCvalue[x][y+1] + t * (float)ADCvalue[x+1][y+1];
+		s = ((float)ADCval - y01) / (y23 - y01);
+		if (0.0 <= s && s <= 1.0) break;
+		y++;
 	}
-    float Lint;
+/*
+	// for CDS0730, 1st
+	float Lint;
     float S;
 	if (ADCval < ADCvalue[x][0]) Lint = L[0];
 	else if (y < Y - 1){
@@ -157,14 +125,22 @@ float calc_pos(int Ton, int ADCval)
 	else{
  	  Lint = L[Y - 1];
 	}
-	// for CDS043
+	// for CDS0730, 1st
     // L[mH] = -11.861 * S[mm] + 114.53
     //S = (114.53 - Lint) / 11.861;
-
 	// for LongStroke
 	// L[mH] = -0.823 * S[mm] + 118.3
     S = (118.3 - Lint) / 0.823;
-/*
+*/
+    float Pos_int;
+	if (ADCval < ADCvalue[x][0]) Pos_int = Pos[0];
+	else if (y < Y - 1){
+	  Pos_int = (1 - s) * Pos[y] + s * Pos[y+1];
+	}
+	else{
+ 	  Pos_int = Pos[Y - 1];
+	}
+
 	Serial.print(x);
 	Serial.print(' ');
 	Serial.print(t);
@@ -173,11 +149,8 @@ float calc_pos(int Ton, int ADCval)
 	Serial.print(' ');
 	Serial.print(s);
 	Serial.print(' ');
-	Serial.print(Lint);
-	Serial.print(' ');
-	Serial.println(S);
-*/
-	return(S);
+	Serial.println(Pos_int);
+	return(Pos_int);
 }
 
 #define LEN_LINE 64
@@ -189,91 +162,6 @@ uint8_t fMeasure = 0;
 
 void loop()
 {
-	if (digitalRead(PIN_SW) == LOW)
-	{
-		/*
-				st = (st + 1) % 18;
-				switch(st){
-					case 0 : Delay = 50; Ton = 1000; break;
-					case 2 : Delay = 50; Ton = 2000; break;
-					case 4 : Delay = 50; Ton = 3000; break;
-					case 6 : Delay = 50; Ton = 4000; break;
-					case 8 : Delay = 50; Ton = 5000; break;
-					case 10 : Delay = 50; Ton = 6000; break;
-					case 12 : Delay = 50; Ton = 7000; break;
-					case 14 : Delay = 50; Ton = 8000; break;
-					case 16 : Delay = 50; Ton = 9000; break;
-					case 1 : Delay = 100; Ton = 1000; break;
-					case 3 : Delay = 100; Ton = 2000; break;
-					case 5 : Delay = 100; Ton = 3000; break;
-					case 7 : Delay = 100; Ton = 4000; break;
-					case 9 : Delay = 100; Ton = 5000; break;
-					case 11 : Delay = 100; Ton = 6000; break;
-					case 13 : Delay = 100; Ton = 7000; break;
-					case 15 : Delay = 100; Ton = 8000; break;
-					case 17 : Delay = 100; Ton = 9000; break;
-				}
-				if (st % 2 == 1) digitalWrite(PIN_LED, HIGH);
-				else digitalWrite(PIN_LED, LOW);
-		*/
-/*
-		st = (st + 1) % 9;
-		switch (st) 
-		{
-			case 0:	Ton = 1000;	break;
-			case 1:	Ton = 2000;	break;
-			case 2:	Ton = 3000;	break;
-			case 3:	Ton = 4000;	break;
-			case 4:	Ton = 5000;	break;
-			case 5:	Ton = 6000;	break;
-			case 6:	Ton = 7000;	break;
-			case 7:	Ton = 8000;	break;
-			case 8:	Ton = 9000;	break;
-
-		}
-*/
-
-//		st = (st + 1) % 20;
-//		Ton = 1000 + 500 * st;
-/*
-		st = (st + 1) % 10;
-		Ton = 1000 + 1000 * st;
-		OCR1A = Ton * 2 - 1; // PWM Duty Cycle
-		while (digitalRead(PIN_SW) == LOW) delay(10);
-		tm = 0;
-*/
-		fMeasure = 1 - fMeasure;
-	}
-	
-	if (fMeasure == 1){
-		digitalWrite(13, HIGH);
-		for (Delay = 200; Delay < 700; Delay += 200){
-			for (Ton = 1000; Ton <= 9000; Ton += 1000){
-				OCR1A = Ton * 2 - 1; // PWM Duty Cycle
-				OCR1B = Ton * 2 - 999;
-				delay(2000);
-				uint16_t ADC0 = v1 - v0;
-				Serial.print(Ton); Serial.print(' '); Serial.print(Delay); Serial.print(' '); Serial.print(v0);Serial.print(' '); Serial.print(v1);Serial.print(' '); Serial.println(ADC0);
-			}
-		}
-		fMeasure = 0;
-		OCR1A = 2000 - 1; // PWM Duty Cycle
-		digitalWrite(13, LOW);
-	}
-
-/*
-	Serial.print(">ADC0:"); Serial.println(ADC0);
-	Serial.print(">Lint:"); Serial.println(Lint);
-	Serial.print(">S:"); Serial.println(S);
-	Serial.print(tm++);
-	Serial.print(' ');
-	Serial.print(Ton);
-	Serial.print(' ');
-	Serial.print(ADC0);
-	Serial.print(' ');
-	Serial.println(calc_pos(Ton, ADC0));
-*/
-
 	// get target position from serial [mm]
 	while(Serial.available() > 0 && pBuf < LEN_LINE){
 		char c = Serial.read();
@@ -286,9 +174,9 @@ void loop()
 		}
 		buf[pBuf++] = c;
 	}
-/*
+
 	// Position Control
-	float S = calc_pos(Ton, ADC0);
+	float S = calc_pos(Ton, v1 - v0);
 #define Kp 4.0
 	int16_t dTon = (uint16_t)((S - St) * Kp);
 	int16_t Ton_t = Ton + dTon;
@@ -300,13 +188,12 @@ void loop()
 	OCR1A = Ton * 2 - 1; // update PWM Duty Cycle
 	Serial.print(tm++);
 	Serial.print(' ');
-	Serial.print(ADC0);
+	Serial.print(v1 - v0);
 	Serial.print(' ');
 	Serial.print(St);
 	Serial.print(' ');
 	Serial.print(S);
 	Serial.print(' ');
 	Serial.println(Ton);
-*/
 }
 
