@@ -12,47 +12,10 @@ uint16_t v0, v1;
 uint8_t n = 0;
 //uint8_t N = 128;
 //uint8_t N = 1;
-uint8_t N = 16;
+uint8_t N = 4;
 
 uint16_t Ton = 1000;
 uint16_t Delay = 100;
-
-/*
-// for CDS043
-#define X 9
-#define Y 5
-uint16_t ADCvalue[X][Y] = {
-	{75, 82, 101, 116, 144}, // for Ton=1, L[0], L[1], ...
-	{73, 81, 101, 116, 143}, // for Ton=2, L[0], L[1], ...
-	{68, 79, 100, 113, 143},
-	{63, 76, 97, 109, 142},
-	{59, 72, 93, 105, 142},
-	{56, 67, 88, 100, 140},
-	{51, 62, 81, 91, 132},
-	{47, 53, 70, 80, 116},
-	{38, 42, 53, 61, 87}
-};
-float L[] = {123.3, 111.5, 94.43, 86.33, 65.3};
-*/
-
-// for LongStroke
-#define X 9
-#define Y 2
-uint16_t ADCvalue[X][Y] = {
-{23, 42},
-{25, 40},
-{27, 38},
-{31, 35},
-{37, 33},
-{38, 29},
-{38, 27},
-{35, 23},
-{29, 18}
-};
-//float L[] = {89.5, 118.3};
-float L[] = {118.3, 89.5};
-
-// Ton = {1, 2, 3, 4, 5, 6, 7, 8, 9}
 
 void setup()
 {
@@ -134,19 +97,26 @@ void loop()
 {
 	if (digitalRead(PIN_SW) == LOW)
 	{
-		st = (st + 1) % 10;
+/*
+		st = (st + 1) % 9;
 		Ton = 1000 + 1000 * st;
 		OCR1A = Ton * 2 - 1; // PWM Duty Cycle
 		while (digitalRead(PIN_SW) == LOW) delay(10);
 		tm = 0;
-//		fMeasure = 1 - fMeasure;
+*/
+		fMeasure = 1 - fMeasure;
 	}
 	
 	if (fMeasure == 1){
 		digitalWrite(13, HIGH);
 		for (Ton = 1000; Ton <= 9000; Ton += 1000){
-			Serial.print(Ton);
 			uint16_t v1s = 0;
+			OCR1A = Ton * 2 - 1; // PWM Duty Cycle
+			delay(1000);
+			Serial.print(Ton);
+			Serial.print(','); Serial.print(v0);
+			Serial.print(','); Serial.println(v1);
+/*
 			for (Delay = 100; Delay < 800; Delay += 200){
 				OCR1A = Ton * 2 - 1; // PWM Duty Cycle
 				OCR1B = Ton * 2 - 201;
@@ -155,6 +125,7 @@ void loop()
 				v1s += v1;
 			}
 			Serial.print(','); Serial.println(v1s / 4);
+*/
 		}
 		fMeasure = 0;
 		OCR1A = 2000 - 1; // PWM Duty Cycle
