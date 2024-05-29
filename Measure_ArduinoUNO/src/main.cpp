@@ -110,13 +110,13 @@ void loop()
 	if (fMeasure == 1){
 		digitalWrite(13, HIGH);
 		for (Ton = 1000; Ton <= 9000; Ton += 1000){
+			Serial.print(Ton);
 			uint16_t v1s = 0;
 			OCR1A = Ton * 2 - 1; // PWM Duty Cycle
-			delay(1000);
-			Serial.print(Ton);
-			Serial.print(','); Serial.print(v0);
-			Serial.print(','); Serial.println(v1);
-/*
+			delay(2000);
+//			Serial.print(','); Serial.print(v0);
+//			Serial.print(','); Serial.print(v1);
+//			Serial.print(','); Serial.println(v1-v0);
 			for (Delay = 100; Delay < 800; Delay += 200){
 				OCR1A = Ton * 2 - 1; // PWM Duty Cycle
 				OCR1B = Ton * 2 - 201;
@@ -125,12 +125,12 @@ void loop()
 				v1s += v1;
 			}
 			Serial.print(','); Serial.println(v1s / 4);
-*/
 		}
 		fMeasure = 0;
 		OCR1A = 2000 - 1; // PWM Duty Cycle
 		OCR1B = 999;
 		digitalWrite(13, LOW);
 	}
+
 }
 
