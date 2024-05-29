@@ -157,8 +157,6 @@ char buf[LEN_LINE];
 uint8_t pBuf = 0;
 float St = 3.0;
 
-uint8_t fMeasure = 0;
-
 void loop()
 {
 	// get target position from serial [mm]
