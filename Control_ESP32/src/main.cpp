@@ -9,6 +9,9 @@
 // https://qiita.com/motorcontrolman/items/18abd9738860f6ba5620
 // https://rt-net.jp/mobility/archives/10150
 
+// ESP32 timer interrupt & WDT timeout
+// https://qiita.com/GANTZ/items/892841dcdd6dbfab0baa
+
 // MCPWM0, MCPWM1
 
 // events
@@ -27,8 +30,8 @@
 #define PIN_PWM 21
 #define PIN_ADC 22
 
-#define PIN_FLAG1 5
-#define PIN_FLAG2 2
+#define PIN_FLAG1 2
+#define PIN_FLAG2 5
 
 uint16_t v0, v0_, v1;
 uint16_t tm = 0;
@@ -58,39 +61,39 @@ void IRAM_ATTR isr_handler(void *XX)
 {
   if (MCPWM0.int_st.val & BM_INT_TIMER0_TEZ){
     // interrupt of Timer0 == 0
-		delayMicroseconds(100); // after 100us of PWM ON
-		v0_ = analogReadMilliVolts(PIN_ADC);
-    digitalWrite(PIN_FLAG1, 1);
-    digitalWrite(PIN_FLAG1, 0);
+	delayMicroseconds(100); // after 100us of PWM ON
+//	v0_ = analogReadMilliVolts(PIN_ADC);
+    digitalWrite(PIN_FLAG1, 1 - digitalRead(PIN_FLAG1));
   }
   if (MCPWM0.int_st.val & BM_INT_OP0_TEB){
     // interrupt of Timer0 == REGB
-		v1 = analogReadMilliVolts(PIN_ADC);
-		v0 = v0_;
-    digitalWrite(PIN_FLAG2, 1);
-    digitalWrite(PIN_FLAG2, 0);
+//	v1 = analogReadMilliVolts(PIN_ADC);
+	v0 = v0_;
+	digitalWrite(PIN_FLAG2, 1 - digitalRead(PIN_FLAG2));
   }
   MCPWM0.int_clr.val = MCPWM0.int_st.val; // clear interrupt flags
 }
 
 void setup() {
-  pinMode(PIN_FLAG1, OUTPUT); digitalWrite(PIN_FLAG1, 0);
-  pinMode(PIN_FLAG2, OUTPUT); digitalWrite(PIN_FLAG2, 0);
-  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, PIN_PWM);
+	M5.begin();
+	pinMode(PIN_FLAG1, OUTPUT); digitalWrite(PIN_FLAG1, 0);
+	pinMode(PIN_FLAG2, OUTPUT); digitalWrite(PIN_FLAG2, 0);
+	mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, PIN_PWM);
 
-  mcpwm_config_t pwm_config;
-  pwm_config.frequency = 100; // 100Hz,
-  pwm_config.cmpr_a = 0; // duty cycle for A
-  pwm_config.cmpr_b = 0; // duty cycle for B
-  pwm_config.counter_mode = MCPWM_UP_COUNTER;
-  pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // active high
-  mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,  &pwm_config);
+	mcpwm_config_t pwm_config;
+	pwm_config.frequency = 100; // 100Hz,
+	pwm_config.cmpr_a = 0; // duty cycle for A
+	pwm_config.cmpr_b = 0; // duty cycle for B
+	pwm_config.counter_mode = MCPWM_UP_COUNTER;
+	pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // active high
+	mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,  &pwm_config);
 
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 10);
+//	mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 10);
+	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 1000); // 1ms
 	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 500); // 500us
-  MCPWM0.int_ena.val |= BM_INT_TIMER0_TEZ;
-  MCPWM0.int_ena.val |= BM_INT_OP0_TEB;
-  ESP_ERROR_CHECK(mcpwm_isr_register(MCPWM_UNIT_0, isr_handler, NULL, ESP_INTR_FLAG_IRAM, NULL));
+	MCPWM0.int_ena.val |= BM_INT_TIMER0_TEZ;
+	MCPWM0.int_ena.val |= BM_INT_OP0_TEB;
+	ESP_ERROR_CHECK(mcpwm_isr_register(MCPWM_UNIT_0, isr_handler, NULL, ESP_INTR_FLAG_IRAM, NULL));
 }
 
 float calc_pos(int Ton, int ADCval)
@@ -140,7 +143,7 @@ void loop() {
 		}
 		buf[pBuf++] = c;
 	}
-
+/*
 	// Position Control
 	Ton = (uint16_t)(1000 * duty);
 	float S = calc_pos(Ton, v1 - v0);
@@ -152,6 +155,7 @@ void loop() {
 	if (duty_t > duty_MAX) duty = duty_MAX;
 	else if (duty_t < duty_MIN) duty = duty_MIN;
 	else duty = duty_t;
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 10);
+    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 10);
 	Serial.printf("%d %d %.3f %.3f %.3f\n", tm++, v1 - v0, St, S, duty);
+*/
 }
