@@ -24,11 +24,11 @@
 //#define UNIT MCPWM_UNIT_0
 
 #define BM_INT_TIMER0_TEZ (1 << 3)
-#define BM_INT_OP0_TEA    (1 << 15)
-#define BM_INT_OP0_TEB    (1 << 18)
+#define BM_INT_OP0_TEA	(1 << 15)
+#define BM_INT_OP0_TEB	(1 << 18)
 
 #define PIN_PWM 21
-#define PIN_ADC 22
+#define PIN_ADC 35
 
 #define PIN_FLAG1 2
 #define PIN_FLAG2 5
@@ -56,26 +56,67 @@ uint16_t ADCvalue[X][Y] = {
 
 float Pos[] = {0, 1.03, 2.13, 3.02, 4.1, 4.87};
 
+volatile SemaphoreHandle_t pwmSemaphore;
+volatile uint8_t st_int = 0;
 
 void IRAM_ATTR isr_handler(void *XX)
 {
-  if (MCPWM0.int_st.val & BM_INT_TIMER0_TEZ){
-    // interrupt of Timer0 == 0
-	delayMicroseconds(100); // after 100us of PWM ON
-//	v0_ = analogReadMilliVolts(PIN_ADC);
-    digitalWrite(PIN_FLAG1, 1 - digitalRead(PIN_FLAG1));
-  }
-  if (MCPWM0.int_st.val & BM_INT_OP0_TEB){
-    // interrupt of Timer0 == REGB
-//	v1 = analogReadMilliVolts(PIN_ADC);
-	v0 = v0_;
-	digitalWrite(PIN_FLAG2, 1 - digitalRead(PIN_FLAG2));
-  }
-  MCPWM0.int_clr.val = MCPWM0.int_st.val; // clear interrupt flags
+	if (MCPWM0.int_st.val & BM_INT_TIMER0_TEZ){
+	  // interrupt of Timer0 == 0
+		st_int = 1;
+  	}
+  	else if (MCPWM0.int_st.val & BM_INT_OP0_TEB){
+		// interrupt of Timer0 == REGB
+		st_int = 2;
+	}
+	// other interrupt may occur, so don't make st_int=0
+	xSemaphoreGiveFromISR(pwmSemaphore, NULL);
+	MCPWM0.int_clr.val = MCPWM0.int_st.val; // clear interrupt flags
 }
+
+#define LEN_LINE 64
+char buf[LEN_LINE];
+uint8_t pBuf = 0;
+float St = 3.0;
+
+void timer_task(void *pvParameters){
+	while(1){
+		if (xSemaphoreTake(pwmSemaphore, 0) == pdTRUE) {
+			if (st_int == 1){
+				st_int = 0;
+				delayMicroseconds(100); // after 100us of PWM ON
+				digitalWrite(PIN_FLAG1, 1);	digitalWrite(PIN_FLAG1, 0);	
+				v0_ = analogReadMilliVolts(PIN_ADC);
+			}
+			else if (st_int == 2){
+				st_int = 0;
+				digitalWrite(PIN_FLAG2, 1);	 digitalWrite(PIN_FLAG2, 0);	
+				v1 = analogReadMilliVolts(PIN_ADC);
+				v0 = v0_;
+			}
+		}
+
+	// get target position from serial [mm]
+	while(Serial.available() > 0 && pBuf < LEN_LINE){
+		char c = Serial.read();
+		if (c == '\r'){
+	 		buf[pBuf] = '\0';
+			Serial.println(buf);
+			pBuf = 0;
+			St = atof(buf);
+		}
+		buf[pBuf++] = c;
+	}
+
+	}
+}
+
 
 void setup() {
 	M5.begin();
+
+	pwmSemaphore = xSemaphoreCreateBinary();
+
 	pinMode(PIN_FLAG1, OUTPUT); digitalWrite(PIN_FLAG1, 0);
 	pinMode(PIN_FLAG2, OUTPUT); digitalWrite(PIN_FLAG2, 0);
 	mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, PIN_PWM);
@@ -88,12 +129,13 @@ void setup() {
 	pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // active high
 	mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,  &pwm_config);
 
-//	mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 10);
-	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 1000); // 1ms
+	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 1000); // 1ms, PWM ON
 	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 500); // 500us
 	MCPWM0.int_ena.val |= BM_INT_TIMER0_TEZ;
 	MCPWM0.int_ena.val |= BM_INT_OP0_TEB;
 	ESP_ERROR_CHECK(mcpwm_isr_register(MCPWM_UNIT_0, isr_handler, NULL, ESP_INTR_FLAG_IRAM, NULL));
+
+ 	xTaskCreateUniversal(timer_task, "task1", 8192, NULL, 2/*=priority*/,	NULL, APP_CPU_NUM);
 }
 
 float calc_pos(int Ton, int ADCval)
@@ -108,7 +150,7 @@ float calc_pos(int Ton, int ADCval)
 	if (t < 0.0) t = 0.0;
 	else if (t > 1.0) t = 1.0;
 	float s;
-    y = 0; while(y < Y - 1){
+	y = 0; while(y < Y - 1){
 		float y01 = (1.0 - t) * (float)ADCvalue[x][y] + t * (float)ADCvalue[x+1][y];
 		float y23 = (1.0 - t) * (float)ADCvalue[x][y+1] + t * (float)ADCvalue[x+1][y+1];
 		s = ((float)ADCval - y01) / (y23 - y01);
@@ -126,23 +168,7 @@ float calc_pos(int Ton, int ADCval)
 	return(Pos_int);
 }
 
-#define LEN_LINE 64
-char buf[LEN_LINE];
-uint8_t pBuf = 0;
-float St = 3.0;
-
 void loop() {
-	// get target position from serial [mm]
-	while(Serial.available() > 0 && pBuf < LEN_LINE){
-		char c = Serial.read();
-		if (c == '\r'){
-	 		buf[pBuf] = '\0';
-			Serial.println(buf);
-			pBuf = 0;
-			St = atof(buf);
-		}
-		buf[pBuf++] = c;
-	}
 /*
 	// Position Control
 	Ton = (uint16_t)(1000 * duty);
@@ -155,7 +181,7 @@ void loop() {
 	if (duty_t > duty_MAX) duty = duty_MAX;
 	else if (duty_t < duty_MIN) duty = duty_MIN;
 	else duty = duty_t;
-    mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 10);
+	mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 10);
 	Serial.printf("%d %d %.3f %.3f %.3f\n", tm++, v1 - v0, St, S, duty);
 */
 }

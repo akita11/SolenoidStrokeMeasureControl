@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <SPI.h>
 
 #define PIN_FLAG1 2
 #define PIN_FLAG2 3
@@ -51,7 +52,7 @@ uint16_t ADCvalue[X][Y] = {
 float Pos[] = {0.0, 1.0, 2.08, 3.03, 3.96, 4.82};
 */
 
-// for CDS0730140 (Vs=6V)
+// for CDS0730140 (Vs=6V, Rf=30k)
 #define X 9
 #define Y 6
 uint16_t ADCvalue[X][Y] = {
@@ -89,7 +90,48 @@ void setup()
 	TIMSK1 |= _BV(TOIE1);  // enable Timer1 OVF interrupt (=PWM ON)
 	TIMSK1 |= _BV(OCIE1B); // enable Timer1 COMPB interrupt
 	sei();				   // enable global interrupt
+
+/*
+	// setup SPI
+	SPCR |= bit(SPE); // enabel SPI
+	SPCR |= bit(DORD); // LSB first
+	SPCR |= bit(CPOL); // clock polarity
+	pinMode(MISO, OUTPUT);
+	pinMode(SCK, INPUT_PULLUP);
+	pinMode(MOSI, INPUT_PULLUP);
+	pinMode(SS, INPUT_PULLUP);
+	SPI.attachInterrupt();
+*/
 }
+
+/*
+uint8_t spiBuf[7];
+uint8_t p_spiBuf = 0;
+
+#define getLowerChar(c) ('0' + (c & 0x0f))
+#define getHigherChar(c) ('0' + (c >> 4))
+
+ISR(SPI_STC_vect)
+{
+	uint8_t datBuf[8];
+	spiBuf[p_spiBuf++] = SPDR;
+	if (p_spiBuf == 6){
+		p_spiBuf = 0;
+//		SPCR &= ~bit(SPE); SPCR |= bit(SPE);
+		for (uint8_t i = 0; i < 7; i++){
+			Serial.print(spiBuf[i], HEX); Serial.print(' ');
+		}
+		Serial.println("");
+		sprintf(datBuf, "%c%c%c%c%c.%c%c",
+			getLowerChar(spiBuf[2]), getHigherChar(spiBuf[2]),		
+			getLowerChar(spiBuf[3]), getHigherChar(spiBuf[3]),		
+			getLowerChar(spiBuf[4]), getHigherChar(spiBuf[4]),		
+			getLowerChar(spiBuf[5]));		
+		float s = atof(datBuf);
+		Serial.println(s);
+	}
+}
+*/
 
 // Timer1 のオーバーフロー割り込み (=PWM ON)
 ISR(TIMER1_OVF_vect)
@@ -205,7 +247,6 @@ void loop()
 		buf[pBuf++] = c;
 	}
 
-
 	// Position Control
 	float S = calc_pos(Ton, v1 - v0);
 #define Kp 5.0
@@ -227,4 +268,5 @@ void loop()
 	Serial.print(' ');
 	Serial.println(Ton);
 }
+
 
