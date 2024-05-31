@@ -88,7 +88,7 @@ ISR(TIMER1_COMPB_vect)
 {
 //	PORTD |= _BV(PD3);
 	v1 = analogRead(PIN_ADC);
-	v0 = v0_
+	v0 = v0_;
 //	PORTD &= ~(_BV(PD3));
 }
 
