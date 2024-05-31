@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <SPI.h>
 
 #define PIN_FLAG1 2
 #define PIN_FLAG2 3
@@ -12,9 +13,8 @@ uint16_t v0, v0_, v1;
 uint16_t Ton = 1000;
 uint16_t Delay = 100;
 
-// for CDS0730
+// for CDS0730058
 /*
-// (1st)
 #define X 9
 #define Y 6
 uint16_t ADCvalue[X][Y] = {
@@ -34,22 +34,40 @@ float L[] = {123.3, 111.5, 94.43, 86.33, 65.3};
     //S = (114.53 - Lint) / 11.861;
 */
 
-// (2nd)
+// for CDS0730140 (Vs=5V)
+/*
 #define X 9
 #define Y 6
 uint16_t ADCvalue[X][Y] = {
-{73, 85, 99, 113, 133, 149},
-{72, 84, 99, 113, 133, 148},
-{69, 82, 98, 112, 132, 147},
-{65, 78, 95, 112, 133, 147},
-{61, 74, 91, 108, 132, 147},
-{58, 69, 86, 103, 128, 146},
-{53, 63, 78, 94, 120, 139},
-{47, 55, 67, 82, 105, 123},
-{39, 43, 50, 60, 78, 94}
+{36, 43, 50, 58, 67, 75}, // ADCValue[0]
+{36, 43, 50, 57, 66, 74},
+{36, 42, 49, 58, 66, 74},
+{35, 43, 49, 57, 66, 74},
+{33, 39, 48, 58, 66, 75},
+{30, 37, 46, 57, 67, 75},
+{29, 33, 41, 52, 64, 75},
+{25, 28, 35, 45, 55, 66},
+{22, 23, 29, 35, 43, 51}
 };
+float Pos[] = {0.0, 1.0, 2.08, 3.03, 3.96, 4.82};
+*/
 
-float Pos[] = {0, 1.03, 2.13, 3.02, 4.1, 4.87};
+// for CDS0730140 (Vs=6V, Rf=30k)
+#define X 9
+#define Y 6
+uint16_t ADCvalue[X][Y] = {
+{43, 50, 59, 69, 80, 87},
+{42, 50, 59, 68, 80, 88},
+{42, 49, 59, 68, 79, 87},
+{40, 48, 59, 68, 79, 87},
+{38, 46, 58, 68, 80, 87},
+{36, 43, 54, 65, 80, 87},
+{34, 39, 49, 61, 76, 86},
+{30, 34, 43, 53, 67, 77},
+{25, 28, 33, 40, 50, 59}
+};
+float Pos[] = {0, 1, 2.08, 3.03, 3.96, 4.82};
+
 
 void setup()
 {
@@ -72,7 +90,9 @@ void setup()
 	TIMSK1 |= _BV(TOIE1);  // enable Timer1 OVF interrupt (=PWM ON)
 	TIMSK1 |= _BV(OCIE1B); // enable Timer1 COMPB interrupt
 	sei();				   // enable global interrupt
+
 }
+
 
 // Timer1 のオーバーフロー割り込み (=PWM ON)
 ISR(TIMER1_OVF_vect)
@@ -109,12 +129,21 @@ float calc_pos(int Ton, int ADCval)
     y = 0; while(y < Y - 1){
 		float y01 = (1.0 - t) * (float)ADCvalue[x][y] + t * (float)ADCvalue[x+1][y];
 		float y23 = (1.0 - t) * (float)ADCvalue[x][y+1] + t * (float)ADCvalue[x+1][y+1];
+/*
+		Serial.print(ADCval);
+		Serial.print(' ');
+		Serial.print(y);
+		Serial.print(' ');
+		Serial.print(y01);
+		Serial.print(' ');
+		Serial.println(y23);
+*/
 		s = ((float)ADCval - y01) / (y23 - y01);
 		if (0.0 <= s && s <= 1.0) break;
 		y++;
 	}
 /*
-	// for CDS0730, 1st
+	// for CDS0730058
 	float Lint;
     float S;
 	if (ADCval < ADCvalue[x][0]) Lint = L[0];
@@ -139,7 +168,9 @@ float calc_pos(int Ton, int ADCval)
 	else{
  	  Pos_int = Pos[Y - 1];
 	}
-
+/*
+	Serial.print(ADCval);
+	Serial.print(' ');
 	Serial.print(x);
 	Serial.print(' ');
 	Serial.print(t);
@@ -148,7 +179,10 @@ float calc_pos(int Ton, int ADCval)
 	Serial.print(' ');
 	Serial.print(s);
 	Serial.print(' ');
+	Serial.print(Ton);
+	Serial.print(' ');
 	Serial.println(Pos_int);
+*/
 	return(Pos_int);
 }
 
@@ -167,6 +201,8 @@ void loop()
 			Serial.println(buf);
 			pBuf = 0;
 			St = atof(buf);
+//			Ton = atoi(buf);
+//			OCR1A = Ton * 2 - 1; // update PWM Duty Cycle
 //			tm = 0;
 		}
 		buf[pBuf++] = c;
@@ -174,10 +210,10 @@ void loop()
 
 	// Position Control
 	float S = calc_pos(Ton, v1 - v0);
-#define Kp 4.0
+#define Kp 5.0
 	int16_t dTon = (uint16_t)((S - St) * Kp);
 	int16_t Ton_t = Ton + dTon;
-#define Ton_MAX 9900
+#define Ton_MAX 9000
 #define Ton_MIN 1000
 	if (Ton_t > Ton_MAX) Ton = Ton_MAX;
 	else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
@@ -193,4 +229,5 @@ void loop()
 	Serial.print(' ');
 	Serial.println(Ton);
 }
+
 
