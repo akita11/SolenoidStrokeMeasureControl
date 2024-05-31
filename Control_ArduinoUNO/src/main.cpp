@@ -7,6 +7,7 @@
 #define PIN_PWM 9
 #define PIN_SW 4
 #define PIN_LED 13
+#define PIN_POT A1
 
 uint16_t v0, v0_, v1;
 
@@ -207,6 +208,11 @@ void loop()
 		}
 		buf[pBuf++] = c;
 	}
+
+	// set St by potentiometer
+	uint16_t St_ = analogRead(PIN_POT);
+	// 0-1023 -> St:0-4
+	St = (float)St_ * 4.0 / 1023.0;
 
 	// Position Control
 	float S = calc_pos(Ton, v1 - v0);
