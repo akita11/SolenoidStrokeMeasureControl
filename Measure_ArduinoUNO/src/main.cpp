@@ -162,14 +162,16 @@ void loop()
 	if (fMeasure == 1){
 		char datBuf[8];
 		if (p_spiBuf >= 6){
-			sprintf(datBuf, "%c%c%c%c%c.%c%c",
-					getLowerChar(spiBuf[2]), getHigherChar(spiBuf[2]),		
-					getLowerChar(spiBuf[3]), getHigherChar(spiBuf[3]),		
-					getLowerChar(spiBuf[4]), getHigherChar(spiBuf[4]),		
-					getLowerChar(spiBuf[5]));		
+			if (spiBuf[0] == 0xff && spiBuf[1] == 0xff){ // check data header
+				sprintf(datBuf, "%c%c%c%c%c.%c%c",
+						getLowerChar(spiBuf[2]), getHigherChar(spiBuf[2]),		
+						getLowerChar(spiBuf[3]), getHigherChar(spiBuf[3]),		
+						getLowerChar(spiBuf[4]), getHigherChar(spiBuf[4]),		
+						getLowerChar(spiBuf[5]));		
 				float s = atof(datBuf);
-			Serial.print(s);
-			Serial.println(" ");
+				Serial.print(s);
+				Serial.println(" ");
+			}
 			for (uint8_t i = 0; i < p_spiBuf; i++){
 				Serial.print(spiBuf[i], HEX); Serial.print(' ');
 			}
