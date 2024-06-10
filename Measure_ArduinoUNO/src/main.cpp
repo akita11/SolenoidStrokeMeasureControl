@@ -10,14 +10,14 @@
 
 #define PIN_CALIPER 8
 
+#define MEASURE_PARAM
+
 // SCK=13(p3), MOSI=11(p2), GND(p1), /REQ(p5)
 
-uint32_t v0s, v1s;
-uint16_t v0, v1;
 uint8_t n = 0;
-//uint8_t N = 128;
-//uint8_t N = 1;
-uint8_t N = 4;
+uint8_t N = 8; 
+uint16_t v0s, v1s;
+uint16_t v0, v1;
 
 uint16_t Ton = 1000;
 uint16_t Delay = 100;
@@ -28,6 +28,8 @@ uint8_t p_spiBuf = 0;
 #define getLowerChar(c) ('0' + (c & 0x0f))
 #define getHigherChar(c) ('0' + (c >> 4))
 
+#ifdef MEASURE_PARAM
+#else
 ISR(SPI_STC_vect)
 {
 	spiBuf[p_spiBuf] = SPDR;
@@ -52,6 +54,7 @@ ISR(SPI_STC_vect)
 //		SPCR &= ~bit(SPE); SPCR |= bit(SPE);
 //	}
 }
+#endif
 
 void setup()
 {
@@ -68,8 +71,8 @@ void setup()
 
 	ICR1 = 19999;		 // 2MHz/20000=100Hz(10ms) / TOP
 	OCR1A = Ton * 2 - 1; // PWM Duty Cycle
-	OCR1B = 999;		 // 2MHz/1000=2kHz / 0.5ms
-//	OCR1B = 1799;		 // 2MHz/1800=1.111kHz / 0.9ms
+//	OCR1B = 999;		 // 0.5us(2MHz)*1000 = 0.5ms
+	OCR1B = 1399;		 // 0.5us(2MHz)*1400 = 0.7ms
 
 	// enable interrupts
 	TIMSK1 |= _BV(TOIE1);  // enable Timer1 OVF interrupt (=PWM ON)
@@ -77,6 +80,8 @@ void setup()
     //TIMSK1 |= _BV(OCIE1A); // enable Timer1 COMPA interrupt (=PWM OFF)
 	sei();				   // enable global interrupt
 
+#ifdef MEASURE_PARAM
+#else
 	pinMode(PIN_CALIPER, OUTPUT); digitalWrite(PIN_CALIPER, HIGH);
 	// setup SPI
 	SPCR |= bit(SPE); // enabel SPI
@@ -87,7 +92,15 @@ void setup()
 	pinMode(MOSI, INPUT_PULLUP);
 //	pinMode(SS, INPUT_PULLUP);
 	SPI.attachInterrupt();
+#endif
 }
+
+/*
+// for multiple sampling
+uint16_t v0s = 0, v1s = 0, v2s = 0, v3s = 0, v4s = 0;
+uint16_t v0, v1, v2, v3, v4;
+*/
+
 
 // Timer1 のオーバーフロー割り込み (=PWM ON)
 ISR(TIMER1_OVF_vect)
@@ -96,6 +109,33 @@ ISR(TIMER1_OVF_vect)
 //	PORTD |= _BV(PD2);
 	v0s += analogRead(PIN_ADC);
 //	PORTD &= ~(_BV(PD2));
+/*
+	delayMicroseconds(100);
+	PORTD |= _BV(PD2);
+	v0s += analogRead(PIN_ADC);
+	delayMicroseconds(100);
+	PORTD &= ~(_BV(PD2));
+	v1s += analogRead(PIN_ADC);
+	delayMicroseconds(100);
+	PORTD |= _BV(PD2);
+	v2s += analogRead(PIN_ADC);
+	delayMicroseconds(100);
+	PORTD &= ~(_BV(PD2));
+	v3s += analogRead(PIN_ADC);
+	delayMicroseconds(100);
+	PORTD |= _BV(PD2);
+	v4s += analogRead(PIN_ADC);
+	PORTD &= ~(_BV(PD2));
+	n++;
+	if (n == N){
+		n = 0;
+		v0 = v0s / N;
+		v1 = v1s / N;
+		v2 = v2s / N;
+		v3 = v3s / N;
+		v4 = v4s / N;
+	}
+*/
 }
 
 // Timer1 のCompareMatchB割り込み
@@ -108,29 +148,8 @@ ISR(TIMER1_COMPB_vect)
 	if (n == N)
 	{
 		n = 0;
-		v0 = v0s / N; v1 = v1s / N;
-//		Serial.print(v0); Serial.print(","); Serial.print(v1); Serial.print(","); Serial.println(v1 - v0);
-		v0s = 0; v1s = 0;
-	}
-}
-
-// Timer1 のCompareMatchA割り込み(=PWM OFF)
-ISR(TIMER1_COMPA_vect)
-{
-	PORTD |= _BV(PD3);
-	v1 += analogRead(PIN_ADC);
-	PORTD &= ~(_BV(PD3));
-	n++;
-	if (n == N)
-	{
-		n = 0;
-		v0 /= N;
-		v1 /= N;
-/*
-		Serial.print(v0 * 5.0 / 1024.0);
-		Serial.print(",");
-		Serial.println(v1 * 5.0 / 1024.0);
-*/
+		v0 = v0s / N; v0s = 0;
+		v1 = v1s / N; v1s = 0;
 	}
 }
 
@@ -152,14 +171,85 @@ void loop()
 		tm = 0;
 */
 		fMeasure = 1 - fMeasure;
+#ifdef MEASURE_PARAM
+#else		
 		if (fMeasure == 1){
 			SPCR &= ~bit(SPE); delay(1); SPCR |= bit(SPE);
 		}
 		digitalWrite(PIN_CALIPER, 1 - fMeasure);
+#endif
 		delay(500);
 	}
 	
 	if (fMeasure == 1){
+#ifdef MEASURE_PARAM
+		int v[9][5];
+		digitalWrite(13, HIGH);
+		uint8_t iTon, iDelay;;
+/*
+		for (iDelay = 0; iDelay < 5; iDelay++){
+			Delay = 100 + iDelay * 200;
+			for (iTon = 0; iTon < 9; iTon++){
+				Ton = iTon * 1000 + 1000;
+				OCR1A = Ton * 2 - 1; // PWM Duty Cycle
+				OCR1B = Ton * 2 - 201;
+				v0s = 0; v1s = 0; n = 0;
+				delay(2000);
+				v[iTon][iDelay] = v0;
+			}
+		}
+		for (iTon = 0; iTon < 9; iTon++){
+			Serial.print(iTon+1);
+			for (iDelay = 0; iDelay < 5; iDelay++){
+				 Serial.print(","); Serial.print(v[iTon][iDelay]);
+			}
+			Serial.println();
+		}
+*/
+/*
+		for (iTon = 0; iTon < 9; iTon++){
+			Ton = iTon * 1000 + 1000;
+			OCR1A = Ton * 2 - 1; // PWM Duty Cycle
+//			for (iDelay = 0; iDelay < 5; iDelay++){
+//				OCR1B = 199 + iDelay * 400; // 0.5us*X [ms], 100us=200, 300us=600, 500us=1000, ...
+//				v0s = 0; v1s = 0; n = 0;
+//				delay(1000);
+//				v[iTon][iDelay] = v1;
+//			}
+			delay(1000);
+			v[iTon][0] = v0;
+			v[iTon][1] = v1;
+			v[iTon][2] = v2;
+			v[iTon][3] = v3;
+			v[iTon][4] = v4;
+		}
+		for (iTon = 0; iTon < 9; iTon++){
+			Serial.print(iTon+1);
+			for (iDelay = 0; iDelay < 5; iDelay++){
+				 Serial.print(","); Serial.print(v[iTon][iDelay]);
+			}
+			Serial.println();
+		}
+*/
+		for (iTon = 0; iTon < 9; iTon++){
+			Ton = iTon * 1000 + 1000;
+			OCR1A = Ton * 2 - 1; // PWM Duty Cycle
+			v0s = 0; v1s = 0; n = 0;
+			delay(1000);
+			v[iTon][0] = v0;
+			v[iTon][1] = v1;
+		}
+		OCR1A = 1999; // PWM Duty Cycle
+		for (iTon = 0; iTon < 9; iTon++){
+			Serial.print(iTon+1);
+			for (iDelay = 0; iDelay < 2; iDelay++){
+				 Serial.print(","); Serial.print(v[iTon][iDelay]);
+			}
+			Serial.println();
+		}
+		digitalWrite(13, LOW);
+		fMeasure = 0;
+#else
 		char datBuf[8];
 		if (p_spiBuf >= 6){
 			if (spiBuf[0] == 0xff && spiBuf[1] == 0xff){ // check data header
@@ -178,51 +268,7 @@ void loop()
 			p_spiBuf = 0;
 			SPCR &= ~bit(SPE); delay(1); SPCR |= bit(SPE);
 		}
-/*
-		digitalWrite(13, HIGH);
-		for (Ton = 1000; Ton <= 9000; Ton += 1000){
-			Serial.print(Ton);
-			uint16_t v1s = 0;
-			OCR1A = Ton * 2 - 1; // PWM Duty Cycle
-			delay(2000);
-//			Serial.print(','); Serial.print(v0);
-//			Serial.print(','); Serial.print(v1);
-//			Serial.print(','); Serial.println(v1-v0);
-			for (Delay = 100; Delay < 800; Delay += 200){
-				OCR1A = Ton * 2 - 1; // PWM Duty Cycle
-				OCR1B = Ton * 2 - 201;
-				delay(1000);
-				Serial.print(','); Serial.print(v0);
-				v1s += v1;
-			}
-			Serial.print(','); Serial.println(v1s / 4);
-		}
-		OCR1A = 2000 - 1; // PWM Duty Cycle
-		OCR1B = 999;
-		digitalWrite(13, LOW);
-*/
+#endif
 	}
-
-/*
-	char datBuf[8];
-	if (SPSR & bit(SPIF)){
-		spiBuf[p_spiBuf++] = SPDR;
-		if (p_spiBuf == 6){
-			p_spiBuf = 0;
-//		SPCR &= ~bit(SPE); SPCR |= bit(SPE);
-			for (uint8_t i = 0; i < 7; i++){
-				Serial.print(spiBuf[i], HEX); Serial.print(' ');
-			}
-			Serial.println("");
-			sprintf(datBuf, "%c%c%c%c%c.%c%c",
-				getLowerChar(spiBuf[2]), getHigherChar(spiBuf[2]),		
-				getLowerChar(spiBuf[3]), getHigherChar(spiBuf[3]),		
-				getLowerChar(spiBuf[4]), getHigherChar(spiBuf[4]),		
-				getLowerChar(spiBuf[5]));		
-			float s = atof(datBuf);
-			Serial.println(s);
-		}
-	}
-*/
 }
 

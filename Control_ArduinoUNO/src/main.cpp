@@ -134,8 +134,10 @@ int ADCvalue[X][Y][Z] = {
 
 float pos[Y] = {12.08, 14.3, 16.32, 18.51, 20.07, 22.48, 24.11, 26.11, 28.27, 30.63, 32.75, 35.34};
 
+uint8_t n = 0;
+uint8_t N = 8; 
 
-int vt[2];
+int vt[4];
 
 void setup()
 {
@@ -152,17 +154,23 @@ void setup()
 
 	ICR1 = 19999;		 // 2MHz/20000=100Hz(10ms) / TOP
 	OCR1A = Ton * 2 - 1; // PWM Duty Cycle
+//	ICR1 = 1999;		 // 2MHz/2000=1000Hz(1ms) / TOP
+//	OCR1A = 199; // PWM Duty Cycle
 	// OCR1B/2MHz*1000 = T[ms] ; OCR1B = T[ms]*2000
-//	OCR1B = 999;		 // 0.5ms
-//	OCR1B = 1399;		 // 0.7ms
-	OCR1B = 1799;		 // 0.9ms
+//	OCR1B = 999;		 // 0.5ms for v1
+	OCR1B = 1399;		 // 0.7ms for v1
+//	OCR1B = 1799;		 // 0.9ms for v1
 
 	// enable interrupts
 	TIMSK1 |= _BV(TOIE1);  // enable Timer1 OVF interrupt (=PWM ON)
-	TIMSK1 |= _BV(OCIE1B); // enable Timer1 COMPB interrupt
+//	TIMSK1 |= _BV(OCIE1B); // enable Timer1 COMPB interrupt
 	sei();				   // enable global interrupt
 
 }
+
+// for multi-sampling
+//uint16_t v0s = 0, v1s = 0, v1s = 0, v2s = 0, v3s = 0, v4s = 0;
+//uint16_t v0, v1, v2, v3, v4;
 
 // Timer1 のオーバーフロー割り込み (=PWM ON)
 ISR(TIMER1_OVF_vect)
@@ -176,12 +184,28 @@ ISR(TIMER1_OVF_vect)
 // Timer1 のCompareMatchB割り込み
 ISR(TIMER1_COMPB_vect)
 {
+/*
+	// OCR1B is updated at OVF only...
+	f = 1 - f;
+	if (f == 0){
+		OCR1B = 999; // 0.5ms
+		PORTD |= _BV(PD3);
+		v1 = analogRead(PIN_ADC);
+		PORTD &= ~(_BV(PD3));
+	}
+	else{
+		OCR1B = 1799; // 0.9ms
+		PORTD |= _BV(PD2);
+		v1 = analogRead(PIN_ADC);
+		PORTD &= ~(_BV(PD2));
+	}
+*/
 //	PORTD |= _BV(PD3);
 	v1 = analogRead(PIN_ADC);
+//	PORTD &= ~(_BV(PD3));
 	v0 = v0_;
 	vt[0] = v0_;
 	vt[1] = v1;
-//	PORTD &= ~(_BV(PD3));
 }
 
 uint16_t tm = 0;
@@ -227,7 +251,7 @@ float calcPos(float s)
 }
 
 //float calc_pos(int Ton, int ADCval)
-float calc_pos(float Ton, int nParam, int *param, float *vt)
+float calc_pos(float Ton, int nParam, int *param, int *vt)
 {
   float s;
   int i, j;
@@ -239,22 +263,34 @@ float calc_pos(float Ton, int nParam, int *param, float *vt)
   // calculate intial value of s
   ss = 0;
   for (i = 0; i < nParam; i++){
+		Serial.print('*'); Serial.print(vt[i]); Serial.print(' ');
     for (j = 0; j < Y - 1; j++){
       v0 = calcV(Ton, j, param[i]);
       v1 = calcV(Ton, j + 1, param[i]);
-      t = (vt[i] - v0) / (v1 - v0);
+      t = (float(vt[i]) - v0) / (v1 - v0);
+//			Serial.print(i); Serial.print(' '); Serial.print(j); Serial.print(' ');
+//			Serial.print(vt[i]); Serial.print(' ');
+//			Serial.print(v0); Serial.print(' '); Serial.print(v1); Serial.print(' '); Serial.println(t); 
       if (0 <= t && t <= 1.0) break;
     }
+		if (j == Y - 1) j = Y - 2; // round to maximum
+//		Serial.print(i); Serial.print(' '); Serial.print(j); Serial.print(' ');
+		if (t < 0.0) t = 0.0; else if (t > 1.0) t = 1.0;
+//		Serial.print(t); Serial.print(' ');
     float ps = pos[j] + t * (pos[j+1] - pos[j]);
     sp = (ps - pos[0]) / (pos[Y-1] - pos[0]);
+//		Serial.print(ps); Serial.print(' '); Serial.println(sp);
     //    printf("->%d %f %f %f : %f %f\n", j, t, pos[j], pos[j+1], ps, sp);
     ss += sp;
   }
   s = ss / nParam;
+	Serial.print(s); Serial.print(' '); Serial.println(calcPos(s));
+	// optimization
 #define ds 0.001
 #define MU 0.0001
 #define EMAX  0.005
 #define E0MAX  0.1
+/*
   int st;
   for (st = 0; st < 500; st++){
     float E1, E0;
@@ -265,10 +301,14 @@ float calc_pos(float Ton, int nParam, int *param, float *vt)
       E0 += calcE(vt[i], Ton, s, param[i]);
     }
     float dEds = (E1 - E0) / ds;
+//		Serial.print('*'); Serial.print(st); Serial.print(' '); Serial.println(E0);
     if (E0 < E0MAX || fabs(dEds) < EMAX) break;
     s = s - MU * dEds;
   }
-  return(calcPos(s));
+	Serial.print('#'); Serial.print(s); Serial.print(' '); Serial.println(calcPos(s));
+*/
+//  return(calcPos(s));
+	return(s);
 }
 
 #define LEN_LINE 64
@@ -297,7 +337,8 @@ void loop()
 	if (digitalRead(PIN_SW) == LOW)
 	{
 		st = (st + 1) % 9;
-		Ton = 1000 + 1000 * st;
+		Ton = 1000 + 1000 * st; // for 100Hz
+//		Ton = 100 + 100 * st; // for 1000Hz
 		OCR1A = Ton * 2 - 1; // PWM Duty Cycle
 		while (digitalRead(PIN_SW) == LOW) delay(10);
 		tm = 0;
@@ -315,12 +356,15 @@ void loop()
 	// Position Control
 
 //	float calc_pos(float Ton, int nParam, int *param, float *vt)
-	int param[2] = {0, 4}; // I(0.1), I(0.9)
-	float S = calc_pos(Ton, 2, param, (float *)vt);
+//	int param[2] = {0, 4}; // I(0.1), I(0.9)
+	int param[2] = {0, 2}; // I(0.1), I(0.5)
 
-	Serial.print(S);
-	Serial.print(' ');
-	Serial.println(Ton);
+	float S = calc_pos(Ton, 2, param, vt);
+
+//	Serial.print(vt[0]); Serial.print(' ');
+//	Serial.print(vt[1]); Serial.print(' ');
+//	Serial.print(S); Serial.print(' ');
+//	Serial.println(calcPos(S));
 /*
 #define Kp 5.0
 	int16_t dTon = (uint16_t)((S - St) * Kp);
