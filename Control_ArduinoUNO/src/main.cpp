@@ -15,129 +15,100 @@ uint16_t Ton = 1000;
 uint16_t Delay = 100;
 
 #define X 9 // Ton
-#define Y 12 // pos
-#define Z 5 // I
+#define Y 9 // pos
+#define Z 2 // I
 
 // data from LongStrokeSolenoid, Rf=15k
 int ADCvalue[X][Y][Z] = {
   // Ton=1000
-  // I(01), I(03), I(05), I(07), I(09)
-  {{ 33, 45, 52, 58, 64}, // for pos[0]
-   { 32, 45, 53, 59, 64}, // for pos[1]
-   { 32, 45, 53, 59, 65},
-   { 32, 45, 53, 60, 66},
-   { 31, 44, 53, 60, 67},
-   { 30, 44, 53, 61, 68},
-   { 29, 43, 53, 61, 69},
-   { 29, 43, 54, 62, 70},
-   { 28, 43, 54, 63, 72},
-   { 27, 43, 54, 64, 74},
-   { 26, 43, 55, 66, 76},
-   { 25, 43, 57, 69, 80}},
-  {{ 82, 94, 101, 107, 112},
-   { 81, 93, 100, 106, 111},
-   { 80, 92, 99, 105, 111},
-   { 79, 91, 99, 105, 111},
-   { 77, 90, 98, 104, 110},
-   { 75, 88, 97, 104, 110},
-   { 73, 87, 96, 103, 110},
-   { 72, 85, 95, 103, 111},
-   { 69, 84, 94, 103, 111},
-   { 67, 82, 93, 102, 111},
-   { 64, 80, 92, 102, 111},
-   { 60, 78, 91, 102, 113}},
-  {{ 136, 147, 153, 159, 164},
-   { 134, 145, 152, 157, 162},
-   { 132, 143, 150, 156, 161},
-   { 130, 142, 149, 155, 160},
-   { 128, 140, 148, 154, 160},
-   { 125, 137, 145, 152, 158},
-   { 122, 135, 143, 150, 157},
-   { 120, 133, 142, 150, 156},
-   { 117, 131, 140, 148, 156},
-   { 113, 128, 137, 146, 154},
-   { 108, 124, 135, 145, 153},
-   { 103, 120, 132, 143, 152}},
-  {{ 189, 200, 207, 212, 216},
-   { 188, 198, 205, 210, 215},
-   { 186, 197, 203, 208, 213},
-   { 184, 195, 201, 207, 212},
-   { 182, 193, 199, 206, 210},
-   { 177, 189, 197, 203, 208},
-   { 174, 186, 194, 200, 206},
-   { 172, 184, 192, 199, 205},
-   { 168, 181, 189, 197, 204},
-   { 163, 176, 185, 193, 201},
-   { 157, 172, 182, 191, 198},
-   { 150, 166, 177, 187, 196}},
-  {{ 243, 254, 261, 266, 270},
-   { 243, 253, 259, 264, 268},
-   { 241, 251, 257, 262, 266},
-   { 239, 249, 256, 261, 265},
-   { 236, 247, 253, 259, 263},
-   { 232, 243, 250, 256, 261},
-   { 229, 240, 247, 253, 258},
-   { 226, 237, 244, 251, 256},
-   { 222, 234, 242, 249, 255},
-   { 215, 228, 237, 244, 251},
-   { 210, 223, 233, 240, 247},
-   { 201, 216, 227, 235, 243}},
-  {{ 296, 307, 314, 319, 323},
-   { 297, 307, 313, 318, 322},
-   { 297, 307, 312, 317, 321},
-   { 296, 306, 312, 316, 320},
-   { 293, 303, 309, 315, 318},
-   { 290, 300, 306, 311, 316},
-   { 286, 297, 303, 308, 313},
-   { 283, 294, 301, 306, 312},
-   { 279, 290, 298, 304, 308},
-   { 273, 284, 291, 298, 304},
-   { 267, 280, 288, 294, 301},
-   { 258, 271, 281, 289, 296}},
-  {{ 348, 360, 366, 372, 376},
-   { 351, 362, 368, 373, 377},
-   { 352, 362, 368, 372, 376},
-   { 353, 362, 368, 372, 376},
-   { 351, 361, 367, 371, 375},
-   { 349, 359, 365, 369, 373},
-   { 346, 356, 361, 366, 370},
-   { 344, 354, 360, 365, 369},
-   { 340, 350, 357, 362, 366},
-   { 334, 345, 351, 357, 362},
-   { 329, 340, 347, 353, 358},
-   { 321, 332, 340, 347, 352}},
-  {{ 400, 414, 422, 428, 432},
-   { 405, 417, 424, 429, 433},
-   { 409, 419, 425, 430, 433},
-   { 412, 421, 427, 431, 435},
-   { 411, 420, 425, 430, 433},
-   { 411, 420, 425, 428, 431},
-   { 409, 418, 423, 427, 430},
-   { 409, 418, 423, 427, 430},
-   { 406, 415, 420, 424, 428},
-   { 402, 411, 416, 421, 425},
-   { 397, 406, 412, 417, 421},
-   { 390, 401, 406, 411, 415}},
-  {{ 469, 483, 490, 495, 498},
-   { 471, 484, 491, 495, 499},
-   { 474, 485, 492, 496, 499},
-   { 478, 488, 493, 496, 499},
-   { 478, 488, 493, 496, 499},
-   { 480, 489, 493, 496, 498},
-   { 479, 487, 491, 495, 498},
-   { 480, 488, 493, 494, 497},
-   { 478, 486, 491, 494, 496},
-   { 475, 483, 487, 490, 493},
-   { 472, 480, 485, 488, 491},
-   { 467, 477, 481, 485, 488}}
+  // I(01), I(07)
+  {{33, 59}, // for pos[0]
+   {32, 59}, // for pos[1]
+   {32, 59},
+   {31, 60},
+   {29, 62},
+   {29, 63},
+   {28, 63},
+   {27, 65},
+   {25, 69}},
+  {{83, 107},
+   {82, 106},
+   {80, 106},
+   {78, 106},
+   {75, 105},
+   {74, 105},
+   {71, 104},
+   {69, 105},
+   {63, 105}},
+  {{136, 159},
+   {135, 158},
+   {133, 157},
+   {129, 155},
+   {126, 154},
+   {124, 153},
+   {120, 151},
+   {118, 151},
+   {108, 148}},
+  {{189, 212},
+   {189, 211},
+   {187, 209},
+   {183, 207},
+   {179, 206},
+   {177, 204},
+   {172, 201},
+   {170, 201},
+   {158, 195}},
+  {{244, 266},
+   {244, 265},
+   {242, 264},
+   {238, 261},
+   {233, 257},
+   {232, 258},
+   {227, 254},
+   {225, 254},
+   {209, 243}},
+  {{298, 320},
+   {299, 320},
+   {300, 321},
+   {298, 320},
+   {292, 315},
+   {291, 314},
+   {286, 311},
+   {284, 310},
+   {270, 301}},
+  {{352, 375},
+   {356, 378},
+   {357, 378},
+   {359, 379},
+   {356, 377},
+   {354, 375},
+   {352, 374},
+   {347, 370},
+   {335, 362}},
+  {{407, 433},
+   {412, 435},
+   {416, 437},
+   {420, 439},
+   {421, 440},
+   {421, 439},
+   {419, 438},
+   {417, 436},
+   {407, 429}},
+  {{475, 501},
+   {479, 503},
+   {483, 504},
+   {490, 508},
+   {494, 510},
+   {494, 510},
+   {495, 510},
+   {494, 509},
+   {489, 505}}
 };
 
-float pos[Y] = {12.08, 14.3, 16.32, 18.51, 20.07, 22.48, 24.11, 26.11, 28.27, 30.63, 32.75, 35.34};
+float pos[Y] = { 13.11, 15.08, 17.29, 21.11, 25.03, 27.16, 29.02, 31.18, 35.9};
 
-uint8_t n = 0;
-uint8_t N = 8; 
-
-int vt[4];
+int vt[Z];
+int vmax[X][Z], vmin[X][Z];
 
 void setup()
 {
@@ -154,23 +125,16 @@ void setup()
 
 	ICR1 = 19999;		 // 2MHz/20000=100Hz(10ms) / TOP
 	OCR1A = Ton * 2 - 1; // PWM Duty Cycle
-//	ICR1 = 1999;		 // 2MHz/2000=1000Hz(1ms) / TOP
-//	OCR1A = 199; // PWM Duty Cycle
+
 	// OCR1B/2MHz*1000 = T[ms] ; OCR1B = T[ms]*2000
-//	OCR1B = 999;		 // 0.5ms for v1
 	OCR1B = 1399;		 // 0.7ms for v1
-//	OCR1B = 1799;		 // 0.9ms for v1
 
 	// enable interrupts
 	TIMSK1 |= _BV(TOIE1);  // enable Timer1 OVF interrupt (=PWM ON)
-//	TIMSK1 |= _BV(OCIE1B); // enable Timer1 COMPB interrupt
+	TIMSK1 |= _BV(OCIE1B); // enable Timer1 COMPB interrupt
 	sei();				   // enable global interrupt
 
 }
-
-// for multi-sampling
-//uint16_t v0s = 0, v1s = 0, v1s = 0, v2s = 0, v3s = 0, v4s = 0;
-//uint16_t v0, v1, v2, v3, v4;
 
 // Timer1 のオーバーフロー割り込み (=PWM ON)
 ISR(TIMER1_OVF_vect)
@@ -184,22 +148,6 @@ ISR(TIMER1_OVF_vect)
 // Timer1 のCompareMatchB割り込み
 ISR(TIMER1_COMPB_vect)
 {
-/*
-	// OCR1B is updated at OVF only...
-	f = 1 - f;
-	if (f == 0){
-		OCR1B = 999; // 0.5ms
-		PORTD |= _BV(PD3);
-		v1 = analogRead(PIN_ADC);
-		PORTD &= ~(_BV(PD3));
-	}
-	else{
-		OCR1B = 1799; // 0.9ms
-		PORTD |= _BV(PD2);
-		v1 = analogRead(PIN_ADC);
-		PORTD &= ~(_BV(PD2));
-	}
-*/
 //	PORTD |= _BV(PD3);
 	v1 = analogRead(PIN_ADC);
 //	PORTD &= ~(_BV(PD3));
@@ -226,7 +174,7 @@ float calcV(float Ton, int i_pos, int i_param)
 }
 
 float calcVt(float Ton, float s, int i_param){
-  int k;
+  uint8_t k;
   float posT = pos[0] + s * Dpos;
   for (k = 0; k < Y - 1; k++){
     if (pos[k] <= posT && posT < pos[k+1]) break;
@@ -250,15 +198,38 @@ float calcPos(float s)
   return(pos[0] + s * Dpos);
 }
 
-//float calc_pos(int Ton, int ADCval)
 float calc_pos(float Ton, int nParam, int *param, int *vt)
 {
   float s;
-  int i, j;
+  uint8_t i, j;
 
   float v0, v1;
   float t;
   float ss, sp;
+
+  // round ADCvalue to calculated max & min boundary 
+  for (i = 0; i < nParam; i++){
+    int i_Ton = Ton / 1000 - 1;
+
+    t = (float)(Ton - (i_Ton + 1) * 1000) / 1000.0;
+
+    float vmax0, vmin0;
+    int v0, v1;
+    if (i_Ton < X - 1){
+      v0 = vmax[i_Ton][param[i]];
+      v1 = vmax[i_Ton + 1][param[i]];
+      vmax0 = (float)v0 + t * (float)(v1 - v0);
+      v0 = vmin[i_Ton][param[i]];
+      v1 = vmin[i_Ton + 1][param[i]];
+      vmin0 = (float)v0 + t * (float)(v1 - v0);
+    }
+    else{
+      vmax0 = vmax[i_Ton][param[i]];
+      vmin0 = vmin[i_Ton][param[i]];
+    }
+    if (vt[param[i]] > vmax0) vt[param[i]] = vmax0;
+    if (vt[param[i]] < vmin0) vt[param[i]] = vmin0;
+  }
 
   // calculate intial value of s
   ss = 0;
@@ -273,11 +244,11 @@ float calc_pos(float Ton, int nParam, int *param, int *vt)
 //			Serial.print(v0); Serial.print(' '); Serial.print(v1); Serial.print(' '); Serial.println(t); 
       if (0 <= t && t <= 1.0) break;
     }
-		if (j == Y - 1) j = Y - 2; // round to maximum
 //		Serial.print(i); Serial.print(' '); Serial.print(j); Serial.print(' ');
-		if (t < 0.0) t = 0.0; else if (t > 1.0) t = 1.0;
 //		Serial.print(t); Serial.print(' ');
-    float ps = pos[j] + t * (pos[j+1] - pos[j]);
+    float ps;
+    if (j == Y - 1) ps = pos[Y-1];
+    else ps = pos[j] + t * (pos[j+1] - pos[j]);
     sp = (ps - pos[0]) / (pos[Y-1] - pos[0]);
 //		Serial.print(ps); Serial.print(' '); Serial.println(sp);
     //    printf("->%d %f %f %f : %f %f\n", j, t, pos[j], pos[j+1], ps, sp);
@@ -286,11 +257,10 @@ float calc_pos(float Ton, int nParam, int *param, int *vt)
   s = ss / nParam;
 	Serial.print(s); Serial.print(' '); Serial.println(calcPos(s));
 	// optimization
-#define ds 0.001
+#define ds 0.01
 #define MU 0.0001
-#define EMAX  0.005
+#define dEdsMAX  0.005
 #define E0MAX  0.1
-/*
   int st;
   for (st = 0; st < 500; st++){
     float E1, E0;
@@ -302,13 +272,11 @@ float calc_pos(float Ton, int nParam, int *param, int *vt)
     }
     float dEds = (E1 - E0) / ds;
 //		Serial.print('*'); Serial.print(st); Serial.print(' '); Serial.println(E0);
-    if (E0 < E0MAX || fabs(dEds) < EMAX) break;
+    if (E0 < E0MAX || fabs(dEds) < dEdsMAX) break;
     s = s - MU * dEds;
   }
 	Serial.print('#'); Serial.print(s); Serial.print(' '); Serial.println(calcPos(s));
-*/
-//  return(calcPos(s));
-	return(s);
+  return(calcPos(s));
 }
 
 #define LEN_LINE 64
@@ -344,7 +312,6 @@ void loop()
 		tm = 0;
 		delay(500);
 	}
-
 
 /*
 	// set St by potentiometer
