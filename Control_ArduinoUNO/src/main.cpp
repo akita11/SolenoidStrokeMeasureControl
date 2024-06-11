@@ -119,6 +119,19 @@ void setup()
 	pinMode(PIN_LED, OUTPUT);
 	digitalWrite(PIN_LED, LOW);
 	Serial.begin(115200);
+
+  // calculate boundary of v
+  for (uint8_t ton = 0; ton < X; ton++){
+    for (uint8_t param = 0; param < Z; param++){
+      vmax[ton][param] = 0; vmin[ton][param] = 9999;
+        for (uint8_t ipos = 0; ipos < Y; ipos++){
+	        int v0 = ADCvalue[ton][ipos][param];
+	        if (v0 > vmax[ton][param]) vmax[ton][param] = v0;
+	        if (v0 < vmin[ton][param]) vmin[ton][param] = v0;
+      }
+    }
+  }
+
 	// setup Timer1
 	TCCR1A = _BV(COM1A1) | _BV(WGM11);			  // Ch.A: non-inverting, WGM11=1 (mode14, Fast PWM)
 	TCCR1B = _BV(WGM13) | _BV(WGM12) | _BV(CS11); // WGM13:12=11, CS11=1 (16MHz/8 = 2MHz)
@@ -209,6 +222,7 @@ float calc_pos(float Ton, int nParam, int *param, int *vt)
 
   // round ADCvalue to calculated max & min boundary 
   for (i = 0; i < nParam; i++){
+//		Serial.print('*'); Serial.print(param[i]); Serial.print(':'); Serial.print(vt[param[i]]); Serial.print(' ');
     int i_Ton = Ton / 1000 - 1;
 
     t = (float)(Ton - (i_Ton + 1) * 1000) / 1000.0;
@@ -227,35 +241,29 @@ float calc_pos(float Ton, int nParam, int *param, int *vt)
       vmax0 = vmax[i_Ton][param[i]];
       vmin0 = vmin[i_Ton][param[i]];
     }
-    if (vt[param[i]] > vmax0) vt[param[i]] = vmax0;
-    if (vt[param[i]] < vmin0) vt[param[i]] = vmin0;
+//    Serial.print('['); Serial.print(vmax0); Serial.print(' '); Serial.print(vmin0); Serial.print(']');
+    if (vt[param[i]] > vmax0) vt[param[i]] = (int)vmax0;
+    if (vt[param[i]] < vmin0) vt[param[i]] = (int)vmin0;
+//		Serial.print(vt[param[i]]); Serial.print(' ');
   }
 
   // calculate intial value of s
   ss = 0;
   for (i = 0; i < nParam; i++){
-		Serial.print('*'); Serial.print(vt[i]); Serial.print(' ');
     for (j = 0; j < Y - 1; j++){
       v0 = calcV(Ton, j, param[i]);
       v1 = calcV(Ton, j + 1, param[i]);
       t = (float(vt[i]) - v0) / (v1 - v0);
-//			Serial.print(i); Serial.print(' '); Serial.print(j); Serial.print(' ');
-//			Serial.print(vt[i]); Serial.print(' ');
-//			Serial.print(v0); Serial.print(' '); Serial.print(v1); Serial.print(' '); Serial.println(t); 
       if (0 <= t && t <= 1.0) break;
     }
-//		Serial.print(i); Serial.print(' '); Serial.print(j); Serial.print(' ');
-//		Serial.print(t); Serial.print(' ');
     float ps;
     if (j == Y - 1) ps = pos[Y-1];
     else ps = pos[j] + t * (pos[j+1] - pos[j]);
     sp = (ps - pos[0]) / (pos[Y-1] - pos[0]);
-//		Serial.print(ps); Serial.print(' '); Serial.println(sp);
-    //    printf("->%d %f %f %f : %f %f\n", j, t, pos[j], pos[j+1], ps, sp);
     ss += sp;
   }
   s = ss / nParam;
-	Serial.print(s); Serial.print(' '); Serial.println(calcPos(s));
+  Serial.print('*'); Serial.print(calcPos(s)); Serial.print(' ');
 	// optimization
 #define ds 0.01
 #define MU 0.0001
@@ -275,7 +283,7 @@ float calc_pos(float Ton, int nParam, int *param, int *vt)
     if (E0 < E0MAX || fabs(dEds) < dEdsMAX) break;
     s = s - MU * dEds;
   }
-	Serial.print('#'); Serial.print(s); Serial.print(' '); Serial.println(calcPos(s));
+	Serial.print(st); Serial.print(' ');
   return(calcPos(s));
 }
 
@@ -323,15 +331,13 @@ void loop()
 	// Position Control
 
 //	float calc_pos(float Ton, int nParam, int *param, float *vt)
-//	int param[2] = {0, 4}; // I(0.1), I(0.9)
-	int param[2] = {0, 2}; // I(0.1), I(0.5)
+	int param[2] = {0, 1}; // I(0.1), I(0.7)
 
 	float S = calc_pos(Ton, 2, param, vt);
 
-//	Serial.print(vt[0]); Serial.print(' ');
-//	Serial.print(vt[1]); Serial.print(' ');
-//	Serial.print(S); Serial.print(' ');
-//	Serial.println(calcPos(S));
+	Serial.print(vt[0]); Serial.print(' ');
+	Serial.print(vt[1]); Serial.print(' ');
+	Serial.println(S - 13.0);
 /*
 #define Kp 5.0
 	int16_t dTon = (uint16_t)((S - St) * Kp);

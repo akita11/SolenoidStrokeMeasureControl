@@ -16,8 +16,8 @@
 
 uint8_t n = 0;
 uint8_t N = 8; 
-uint16_t v0s, v1s;
-uint16_t v0, v1;
+uint16_t v0s, v1s, vms;
+uint16_t v0, v1, vm;
 
 uint16_t Ton = 1000;
 uint16_t Delay = 100;
@@ -71,13 +71,12 @@ void setup()
 
 	ICR1 = 19999;		 // 2MHz/20000=100Hz(10ms) / TOP
 	OCR1A = Ton * 2 - 1; // PWM Duty Cycle
-//	OCR1B = 999;		 // 0.5us(2MHz)*1000 = 0.5ms
 	OCR1B = 1399;		 // 0.5us(2MHz)*1400 = 0.7ms
+//	OCR1B = 1899;		 // 0.5us(2MHz)*1900 = 0.95ms, for intermediate difference
 
 	// enable interrupts
 	TIMSK1 |= _BV(TOIE1);  // enable Timer1 OVF interrupt (=PWM ON)
 	TIMSK1 |= _BV(OCIE1B); // enable Timer1 COMPB interrupt
-    //TIMSK1 |= _BV(OCIE1A); // enable Timer1 COMPA interrupt (=PWM OFF)
 	sei();				   // enable global interrupt
 
 #ifdef MEASURE_PARAM
@@ -110,31 +109,16 @@ ISR(TIMER1_OVF_vect)
 	v0s += analogRead(PIN_ADC);
 //	PORTD &= ~(_BV(PD2));
 /*
-	delayMicroseconds(100);
-	PORTD |= _BV(PD2);
+	// for intermediate difference
+	delayMicroseconds(20);
+//	PORTD |= _BV(PD2);
 	v0s += analogRead(PIN_ADC);
-	delayMicroseconds(100);
-	PORTD &= ~(_BV(PD2));
-	v1s += analogRead(PIN_ADC);
-	delayMicroseconds(100);
-	PORTD |= _BV(PD2);
-	v2s += analogRead(PIN_ADC);
-	delayMicroseconds(100);
-	PORTD &= ~(_BV(PD2));
-	v3s += analogRead(PIN_ADC);
-	delayMicroseconds(100);
-	PORTD |= _BV(PD2);
-	v4s += analogRead(PIN_ADC);
-	PORTD &= ~(_BV(PD2));
-	n++;
-	if (n == N){
-		n = 0;
-		v0 = v0s / N;
-		v1 = v1s / N;
-		v2 = v2s / N;
-		v3 = v3s / N;
-		v4 = v4s / N;
-	}
+//	PORTD &= ~(_BV(PD2));
+
+	delayMicroseconds(Delay);
+//	PORTD |= _BV(PD2);
+	vms += analogRead(PIN_ADC);
+//	PORTD &= ~(_BV(PD2));
 */
 }
 
@@ -150,13 +134,12 @@ ISR(TIMER1_COMPB_vect)
 		n = 0;
 		v0 = v0s / N; v0s = 0;
 		v1 = v1s / N; v1s = 0;
+//		vm = vms / N; vms = 0; // for intemediate difference
 	}
 }
 
 uint8_t st = 0;
-
 uint16_t tm = 0;
-
 uint8_t fMeasure = 0;
 
 void loop()
@@ -232,16 +215,29 @@ void loop()
 		}
 */
 		for (iTon = 0; iTon < 9; iTon++){
+			//   v0     vm       v1
+			// 0 10    Ton/2    Ton
 			Ton = iTon * 1000 + 1000;
-			OCR1A = Ton * 2 - 1; // PWM Duty Cycle
-			v0s = 0; v1s = 0; n = 0;
+			OCR1A = Ton * 2 - 1;  // PWM Duty Cycle
+			// for intemediate difference
+//			OCR1B = Ton * 2 - 201; // 100us from end of PWM OFF / 0.5us(2MHz)*200 = 100us
+//			Delay = Ton / 2 - 20 - 100; // 100us=1st ADC time
+
+			v0s = 0; v1s = 0; n = 0; // vms = 0; // for intermediate difference
 			delay(1000);
 			v[iTon][0] = v0;
 			v[iTon][1] = v1;
+/*
+			// for intermediate difference
+			v[iTon][0] = v0;
+			v[iTon][1] = vm;
+			v[iTon][2] = v1;
+*/
 		}
 		OCR1A = 1999; // PWM Duty Cycle
 		for (iTon = 0; iTon < 9; iTon++){
 			Serial.print(iTon+1);
+//			for (iDelay = 0; iDelay < 3; iDelay++){ // for intermediate difference
 			for (iDelay = 0; iDelay < 2; iDelay++){
 				 Serial.print(","); Serial.print(v[iTon][iDelay]);
 			}
