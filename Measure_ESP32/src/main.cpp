@@ -67,15 +67,15 @@ void timer_task(void *pvParameters){
 			if (st_int == 1){
 				st_int = 0;
 				delayMicroseconds(100); // after 100us of PWM ON
-				digitalWrite(PIN_FLAG1, 1);	
+//				digitalWrite(PIN_FLAG1, 1);	
 				v0s += analogReadMilliVolts(PIN_ADC);
-				digitalWrite(PIN_FLAG1, 0);
+//				digitalWrite(PIN_FLAG1, 0);
 				}
 			else if (st_int == 2){
 				st_int = 0;
-				digitalWrite(PIN_FLAG2, 1);
+//				digitalWrite(PIN_FLAG2, 1);
 				v1s += analogReadMilliVolts(PIN_ADC);
-				digitalWrite(PIN_FLAG2, 0);	
+//				digitalWrite(PIN_FLAG2, 0);	
 				n++;
 				if (n == N)
 				{
@@ -90,7 +90,6 @@ void timer_task(void *pvParameters){
 
 void setup() {
 	M5.begin();
-
 	pwmSemaphore = xSemaphoreCreateBinary();
 
 	pinMode(PIN_FLAG1, OUTPUT); digitalWrite(PIN_FLAG1, 0);
@@ -111,7 +110,15 @@ void setup() {
 	MCPWM0.int_ena.val |= BM_INT_OP0_TEB;    // interrupt at RegB match
 	ESP_ERROR_CHECK(mcpwm_isr_register(MCPWM_UNIT_0, isr_handler, NULL, ESP_INTR_FLAG_IRAM, NULL));
 
- 	xTaskCreateUniversal(timer_task, "task1", 8192, NULL, 2/*=priority*/,	NULL, APP_CPU_NUM);
+	// assign timer_task to Core 0 (usually used for radio tasks)
+	disableCore0WDT();
+//	xTaskCreateUniversal(timer_task, "task1", 8192, NULL, 2/*=priority*/,	NULL, APP_CPU_NUM);
+	xTaskCreateUniversal(timer_task, "task1", 8192, NULL, 2/*=priority*/,	NULL, PRO_CPU_NUM);
+
+	M5.Display.setTextSize(2);   
+	M5.Display.clear(TFT_BLACK);
+	M5.Display.setCursor(0, 0);
+	M5.Display.printf("BtnA to start\n");
 }
 
 uint8_t st = 0;
@@ -128,10 +135,9 @@ void loop()
 	}
 	
 	if (fMeasure == 1){
-		M5.Lcd.clear();
-		M5.Lcd.printf("Measuring...");
+		M5.Display.fillRect(0, 20, 320, 240, TFT_BLACK);
+		M5.Display.setCursor(0, 20);
 		int v[9][5];
-		digitalWrite(13, HIGH);
 		uint8_t iTon, iDelay;;
 		for (iTon = 0; iTon < 9; iTon++){
 			Ton = iTon * 1000 + 1000;
@@ -141,9 +147,9 @@ void loop()
 			v[iTon][0] = v0;
 			v[iTon][1] = v1;
 			printf("%d,%d,%d\n", iTon + 1, v[iTon][0], v[iTon][1]);
+			M5.Display.printf("%d,%d,%d\n", iTon + 1, v[iTon][0], v[iTon][1]);
 		}
 		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 1000); // PWM ON
-		M5.Lcd.printf("done\n");
 		fMeasure = 0;
 	}
 }
