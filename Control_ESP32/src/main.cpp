@@ -253,37 +253,6 @@ float calcPos(float s)
 
 float calc_pos(float Ton, int nParam, int *param, int *vt)
 {
-/*
-// for CBS0730140
-float calc_pos(int Ton, int ADCval)
-{
-	uint8_t x, y;
-	x = 0; while(x < X - 1){
-	  if ((uint16_t)(x+1) * 1000 <= Ton && Ton < (uint16_t)(x+2)*1000) break;
-	  x++;
-	}
-	float x0 = (float)(x + 1);
-	float t = ((float)Ton / 1000.0 - x0);
-	if (t < 0.0) t = 0.0;
-	else if (t > 1.0) t = 1.0;
-	float s;
-    y = 0; while(y < Y - 1){
-		float y01 = (1.0 - t) * (float)ADCvalue[x][y] + t * (float)ADCvalue[x+1][y];
-		float y23 = (1.0 - t) * (float)ADCvalue[x][y+1] + t * (float)ADCvalue[x+1][y+1];
-		s = ((float)ADCval - y01) / (y23 - y01);
-		if (0.0 <= s && s <= 1.0) break;
-		y++;
-	}
-	float Pos_int;
-	if (ADCval < ADCvalue[x][0]) Pos_int = Pos[0];
-	else if (y < Y - 1){
-	  Pos_int = (1 - s) * Pos[y] + s * Pos[y+1];
-	}
-	else{
- 	  Pos_int = Pos[Y - 1];
-	}
-	return(Pos_int);
-*/
   float s;
   uint8_t i, j;
 
@@ -367,27 +336,13 @@ void loop() {
 		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // 1ms, PWM ON
 	}
 
-/*
-	// get target position from serial [mm]
-	while(Serial.available() > 0 && pBuf < LEN_LINE){
-		char c = Serial.read();
-		if (c == '\r'){
-	 		buf[pBuf] = '\0';
-			Serial.println(buf);
-			pBuf = 0;
-			St = atof(buf);
-		}
-		buf[pBuf++] = c;
-	}
-*/
 	uint16_t vpot = analogReadMilliVolts(PIN_POT);
 	// 0 - 3.3V -> 13 - 35
 	St = (float)vpot / 3300 * 22 + 13;
-	// Position Control
 	vt[0] = v0; vt[1] = v1;
 	float S = calc_pos(Ton, 2, param, vt);
-	// for CDS0730140
-	//	float S = calc_pos(Ton, v1 - v0);
+/*
+	// Position Control
 #define Kp 5.0
 	int16_t dTon = (uint16_t)((S - St) * Kp);
 	int16_t Ton_t = Ton + dTon;
@@ -405,5 +360,5 @@ void loop() {
 	M5.Display.printf("S:%.2f St:%.2f", S, St);
 	M5.Display.setCursor(0, 20);
 	M5.Display.printf("Ton:%d", Ton);
-//  printf(">Pos:%f\n", S);	printf(">PosT:%f\n", St);
+*/
 }

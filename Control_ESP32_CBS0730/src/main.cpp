@@ -4,7 +4,7 @@
 #include "driver/mcpwm.h"
 #include "soc/mcpwm_reg.h"
 #include "soc/mcpwm_struct.h"
-
+#include "SliderUI.h"
 // using MCPWM
 // https://qiita.com/motorcontrolman/items/18abd9738860f6ba5620
 // https://rt-net.jp/mobility/archives/10150
@@ -41,6 +41,10 @@
 uint16_t v0, v0_, v1;
 uint16_t Ton = 1000;
 
+#define NX 320
+uint8_t gpos[NX], gposT[NX];
+#define NY 200
+uint16_t gp = 0;
 
 // for CDS0730140 (Vs=6V, Rf=30k)
 #define X 9
@@ -99,9 +103,24 @@ void timer_task(void *pvParameters){
 
 int vmax[X], vmin[X];
 
+uint8_t conv_gpos(float S){
+	// S: 0 - 5mm -> 0 - NY - 1
+	return((uint8_t)(S / 5.0 * (float)(NY - 1)));
+}
+
+static constexpr std::size_t slider_count = 1;
+static slider_t slider_list[slider_count];
+
 void setup() {
 	M5.begin();
 	M5.Display.setTextSize(2);
+
+  slider_list[0].setup({20, NY, 320 - 20,       240 - NY }, 0,  500,  200, TFT_WHITE, TFT_BLACK, TFT_LIGHTGRAY);
+
+	for (uint16_t x = 0; x < NX; x++){ gpos[x] = 0; gposT[x] = 0; }
+
+  M5.Display.setEpdMode(epd_mode_t::epd_fastest);
+  for (std::size_t i = 0; i < slider_count; ++i) slider_list[i].draw();
 
 	pwmSemaphore = xSemaphoreCreateBinary();
 
@@ -140,7 +159,6 @@ float calc_pos(int Ton, int vt)
 {
   // round ADCvalue to calculated max & min boundary 
 	int i_Ton = Ton / 1000 - 1;
-	printf("%d : ", vt);
 	float t = (float)(Ton - (i_Ton + 1) * 1000) / 1000.0;
 	float vmax0, vmin0;
   int v0, v1;
@@ -153,7 +171,7 @@ float calc_pos(int Ton, int vt)
     vmin0 = (float)v0 + t * (float)(v1 - v0);
   }
   else{
-   	vmax0 = vmax[i_Ton];
+  	vmax0 = vmax[i_Ton];
    	vmin0 = vmin[i_Ton];
   }
   if (vt > vmax0) vt = (int)vmax0;
@@ -186,35 +204,34 @@ float calc_pos(int Ton, int vt)
 	return(Pos_int);
 }
 
-#define LEN_LINE 64
-char buf[LEN_LINE];
-uint8_t pBuf = 0;
-
 uint8_t iTon = 0;
 
-float St = 30.0;
+float St;
 
 void loop() {
 	M5.update();
+
+  bool changed = false;
+  auto t = M5.Touch.getDetail();
+  for (std::size_t i = 0; i < slider_count; ++i)
+  {
+    if (slider_list[i].update(t)) {
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    int w = slider_list[0].getValue();
+    if (slider_list[0].wasChanged())
+			printf("%d\n", w);
+  }
+
 	if (M5.BtnA.wasClicked()){
 		iTon = (iTon + 1) % 9;
 		Ton = (iTon + 1) * 1000;
 		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // 1ms, PWM ON
 	}
 
-/*
-	// get target position from serial [mm]
-	while(Serial.available() > 0 && pBuf < LEN_LINE){
-		char c = Serial.read();
-		if (c == '\r'){
-	 		buf[pBuf] = '\0';
-			Serial.println(buf);
-			pBuf = 0;
-			St = atof(buf);
-		}
-		buf[pBuf++] = c;
-	}
-*/	
 	uint16_t vpot = analogReadMilliVolts(PIN_POT);
 	// 0 - 3.3V -> 0 - 4mm
 	St = (float)vpot / 3300 * 4.0;
@@ -228,6 +245,14 @@ void loop() {
 	if (Ton_t > Ton_MAX) Ton = Ton_MAX;
 	else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
 	else Ton = Ton_t;
+
+	for (uint16_t x = 0; x < NX - 1; x++){
+		M5.Display.drawLine(x, 0, x, NY - 1, BLACK);
+		uint16_t px = (gp + x) % NX;
+		M5.Display.drawPixel(x, gpos[px], GREEN);
+		M5.Display.drawPixel(x, gposT[px], RED);
+	}	
+	gp = (gp + 1) % NX;
 
 	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // 1ms, PWM ON
 
