@@ -180,9 +180,9 @@ void setup() {
 	M5.begin();
 	M5.Display.setTextSize(2);
 
-	slider_list[0].setup({0, 180, 320, 60}, 1000,  9000,  1000, TFT_WHITE, TFT_BLACK, TFT_WHITE);
-  M5.Display.setEpdMode(epd_mode_t::epd_fastest);
-  for (std::size_t i = 0; i < slider_count; ++i) slider_list[i].draw();
+	slider_list[0].setup({0, 180, 320, 60}, 1000,  9000,  1000, TFT_CYAN, TFT_BLACK, TFT_CYAN);
+	M5.Display.setEpdMode(epd_mode_t::epd_fastest);
+	for (std::size_t i = 0; i < slider_count; ++i) slider_list[i].draw();
 
 	pwmSemaphore = xSemaphoreCreateBinary();
 
