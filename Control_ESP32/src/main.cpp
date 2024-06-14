@@ -4,6 +4,7 @@
 #include "driver/mcpwm.h"
 #include "soc/mcpwm_reg.h"
 #include "soc/mcpwm_struct.h"
+#include "SliderUI.h"
 
 // using MCPWM
 // https://qiita.com/motorcontrolman/items/18abd9738860f6ba5620
@@ -37,6 +38,9 @@
 // for PortC
 #define PIN_FLAG1 13
 #define PIN_FLAG2 14
+
+static constexpr std::size_t slider_count = 1;
+static slider_t slider_list[slider_count];
 
 uint16_t v0, v0_, v1;
 uint16_t Ton = 1000;
@@ -175,6 +179,10 @@ int vmax[X][Z], vmin[X][Z];
 void setup() {
 	M5.begin();
 	M5.Display.setTextSize(2);
+
+	slider_list[0].setup({0, 180, 320, 60}, 1000,  9000,  1000, TFT_WHITE, TFT_BLACK, TFT_WHITE);
+  M5.Display.setEpdMode(epd_mode_t::epd_fastest);
+  for (std::size_t i = 0; i < slider_count; ++i) slider_list[i].draw();
 
 	pwmSemaphore = xSemaphoreCreateBinary();
 
@@ -328,19 +336,54 @@ int param[2] = {0, 1}; // I(0.1), I(0.7)
 
 float St = 30.0;
 
+uint16_t xp, xp0;
+
 void loop() {
 	M5.update();
+  auto t = M5.Touch.getDetail();
+
+  if (slider_list[0].update(t)) {
+    if (slider_list[0].wasChanged()){
+			Ton = slider_list[0].getValue();
+			mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // 1ms, PWM ON
+			M5.Display.fillRect(0, 160, 320, 20, TFT_BLACK);
+			M5.Display.setCursor(0, 160);
+			M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+			M5.Display.printf("PWM Duty: %.2f [%%]", (float)Ton / 100);
+		}
+	}
+
+/*
 	if (M5.BtnA.wasClicked()){
 		iTon = (iTon + 1) % 9;
 		Ton = (iTon + 1) * 1000;
 		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // 1ms, PWM ON
 	}
-
+*/
+/*
 	uint16_t vpot = analogReadMilliVolts(PIN_POT);
 	// 0 - 3.3V -> 13 - 35
 	St = (float)vpot / 3300 * 22 + 13;
+*/
 	vt[0] = v0; vt[1] = v1;
 	float S = calc_pos(Ton, 2, param, vt);
+
+//float pos[] = {13.08, 16.37, 19.03, 23.08, 27.15, 31.01, 35.58};
+
+	if (S < 13.08) xp = 0;
+	else if (S > 35.58) xp = 320;
+	else xp = (uint16_t)(((S - 13.08) / 22.5) * 320);
+	printf("%.2f %d\n", S, xp);
+	M5.Display.drawFastVLine(xp0, 40, 100, TFT_BLACK);
+	M5.Display.drawFastVLine(xp,  40, 100, TFT_GREEN);
+	xp0 = xp;
+	M5.Display.fillRect(50, 0, 70, 20, TFT_BLACK);
+	M5.Display.setCursor(0, 0);
+	M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+	M5.Display.printf("Pos: %.2f [mm]", S);
+
+	delay(5);
+
 /*
 	// Position Control
 #define Kp 5.0

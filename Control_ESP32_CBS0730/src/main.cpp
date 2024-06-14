@@ -43,7 +43,7 @@ uint16_t Ton = 1000;
 
 #define NX 320
 uint8_t gpos[NX], gposT[NX];
-#define NY 200
+#define NY 190
 uint16_t gp = 0;
 
 // for CDS0730140 (Vs=6V, Rf=30k)
@@ -108,14 +108,15 @@ uint8_t conv_gpos(float S){
 	return((uint8_t)(S / 5.0 * (float)(NY - 1)));
 }
 
-static constexpr std::size_t slider_count = 1;
+static constexpr std::size_t slider_count = 2;
 static slider_t slider_list[slider_count];
 
 void setup() {
 	M5.begin();
 	M5.Display.setTextSize(2);
 
-  slider_list[0].setup({20, NY, 320 - 20,       240 - NY }, 0,  500,  200, TFT_WHITE, TFT_BLACK, TFT_LIGHTGRAY);
+  slider_list[0].setup({0, 180, 320, 60}, 0,  500,  100, TFT_WHITE, TFT_BLACK, TFT_LIGHTGRAY);
+  slider_list[1].setup({0, 0, 320, 40}, 0,  1000,  300, TFT_RED, TFT_BLACK, TFT_RED);
 
 	for (uint16_t x = 0; x < NX; x++){ gpos[x] = 0; gposT[x] = 0; }
 
@@ -206,25 +207,28 @@ float calc_pos(int Ton, int vt)
 
 uint8_t iTon = 0;
 
-float St;
+float St = 1.0;
+float Kp = 3.0;
+uint16_t xt, xt0;
 
 void loop() {
 	M5.update();
 
   bool changed = false;
   auto t = M5.Touch.getDetail();
-  for (std::size_t i = 0; i < slider_count; ++i)
-  {
-    if (slider_list[i].update(t)) {
-      changed = true;
-    }
-  }
 
-  if (changed) {
-    int w = slider_list[0].getValue();
-    if (slider_list[0].wasChanged())
-			printf("%d\n", w);
-  }
+  if (slider_list[0].update(t)) {
+    if (slider_list[0].wasChanged()) St = (float)(slider_list[0].getValue()) / 100;
+	}
+	if (slider_list[1].update(t)) {
+  	if (slider_list[1].wasChanged()){
+			Kp = (float)(slider_list[1].getValue()) / 100;
+			M5.Display.fillRect(0, 40, 320, 20, TFT_BLACK);
+			M5.Display.setCursor(0, 40);
+			M5.Display.setTextColor(TFT_RED, TFT_BLACK);
+			M5.Display.printf("Kp:%.2f", Kp);
+		}
+	}
 
 	if (M5.BtnA.wasClicked()){
 		iTon = (iTon + 1) % 9;
@@ -232,12 +236,12 @@ void loop() {
 		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // 1ms, PWM ON
 	}
 
-	uint16_t vpot = analogReadMilliVolts(PIN_POT);
-	// 0 - 3.3V -> 0 - 4mm
-	St = (float)vpot / 3300 * 4.0;
+//	uint16_t vpot = analogReadMilliVolts(PIN_POT);
+//	// 0 - 3.3V -> 0 - 4mm
+//	St = (float)vpot / 3300 * 4.0;
 	// Position Control
 	float S = calc_pos(Ton, v1 - v0);
-#define Kp 5.0
+//#define Kp 5.0
 	int16_t dTon = (uint16_t)((St - S) * Kp);
 	int16_t Ton_t = Ton + dTon;
 #define Ton_MAX 9000
@@ -245,7 +249,10 @@ void loop() {
 	if (Ton_t > Ton_MAX) Ton = Ton_MAX;
 	else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
 	else Ton = Ton_t;
-
+	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
+/*
+	gpos[gp] = conv_gpos(S);
+	gposT[gp] = conv_gpos(St);
 	for (uint16_t x = 0; x < NX - 1; x++){
 		M5.Display.drawLine(x, 0, x, NY - 1, BLACK);
 		uint16_t px = (gp + x) % NX;
@@ -253,14 +260,20 @@ void loop() {
 		M5.Display.drawPixel(x, gposT[px], RED);
 	}	
 	gp = (gp + 1) % NX;
+*/
+	printf("%.2f %.2f %.2f %d %d\n", Kp, S, St, Ton, dTon);
+	xt = (uint16_t)((S / 5.0) * 320);
+	M5.Display.drawFastVLine(xt0, 60, 100, TFT_BLACK);
+	M5.Display.drawFastVLine(xt,  60, 100, TFT_GREEN);
+	xt0 = xt;
 
-	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // 1ms, PWM ON
-
-//	printf("%.2f %.2f %d %d\n", S, St, Ton, dTon);
 //  printf(">Pos:%f\n", S);	printf(">PosT:%f\n", St);
+/*
 	M5.Display.fillRect(0, 0, 320, 50, BLACK);
 	M5.Display.setCursor(0, 0);
 	M5.Display.printf("S:%.2f St:%.2f", S, St);
 	M5.Display.setCursor(0, 20);
 	M5.Display.printf("Ton:%d", Ton);
+*/
+	delay(1);
 }
