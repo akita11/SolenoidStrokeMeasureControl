@@ -26,7 +26,8 @@
 #define BM_INT_TIMER0_TEZ (1 << 3)
 #define BM_INT_OP0_TEA	(1 << 15)
 #define BM_INT_OP0_TEB	(1 << 18)
-
+/*
+// for Core2
 // for PortA
 #define PIN_PWM 32
 #define PIN_ADC 33
@@ -37,6 +38,15 @@
 // for PortC
 #define PIN_FLAG1 13
 #define PIN_FLAG2 14
+*/
+// fore CoreS3SE
+// for PortA
+#define PIN_PWM 2
+#define PIN_ADC 1
+
+// for PortC
+#define PIN_FLAG1 6
+#define PIN_FLAG2 7
 
 uint16_t v0, v0_, v1;
 uint16_t Ton = 1000;
@@ -46,9 +56,24 @@ uint8_t gpos[NX], gposT[NX];
 #define NY 190
 uint16_t gp = 0;
 
-// for CDS0730140 (Vs=6V, Rf=30k)
 #define X 9
 #define Y 6
+// for CDS0730140 (Vs=6V, Rf=30k), CoreS3SE
+uint16_t ADCvalue[X][Y] = {
+{585, 502, 416, 355, 299, 268},
+{584, 495, 412, 351, 291, 261},
+{582, 495, 412, 349, 290, 256},
+{584, 494, 413, 346, 278, 245},
+{582, 492, 403, 329, 265, 234},
+{583, 484, 380, 306, 250, 222},
+{567, 454, 352, 284, 229, 207},
+{502, 395, 301, 239, 198, 182},
+{366, 279, 215, 172, 151, 144}
+};
+float Pos[] = {0, 1, 2.07, 3.03, 4.08, 4.73};
+
+/*
+// for CDS0730140 (Vs=6V, Rf=30k), Core2
 uint16_t ADCvalue[X][Y] = {
 {558, 486, 416, 352, 296, 254},
 {555, 484, 412, 349, 290, 248},
@@ -61,6 +86,7 @@ uint16_t ADCvalue[X][Y] = {
 {327, 253, 196, 154, 136, 129},
 };
 float Pos[] = {0, 1.08, 2.01, 3.08, 4.06, 4.99};
+*/
 
 volatile SemaphoreHandle_t pwmSemaphore;
 volatile uint8_t st_int = 0;
