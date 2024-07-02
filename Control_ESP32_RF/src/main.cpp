@@ -113,6 +113,7 @@ void setup() {
 uint8_t iTon = 0;
 
 uint16_t xt, xt0;
+uint16_t pt, pt0;
 float St = 1.0;
 float S;
 float Kp = 3.0;
@@ -162,10 +163,11 @@ void loop() {
 	printf("%d %.2f\n", Ton, S);
 	// Position Control
 	S = predict_pos(param);
-//#define Kp 5.0
 	int16_t dTon = (uint16_t)((St - S) * Kp);
 	int16_t Ton_t = Ton + dTon;
-#define Ton_MAX 9000
+//#define Ton_MAX 9000
+//#define Ton_MIN 1000
+#define Ton_MAX 9500
 #define Ton_MIN 1000
 	if (Ton_t > Ton_MAX) Ton = Ton_MAX;
 	else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
@@ -174,9 +176,12 @@ void loop() {
 
 //	printf("%.2f %.2f %.2f %d %d\n", Kp, S, St, Ton, dTon);
 	xt = (uint16_t)((S / 5.0) * 320);
-	M5.Display.drawFastVLine(xt0, 60, 100, TFT_BLACK);
-	M5.Display.drawFastVLine(xt,  60, 100, TFT_GREEN);
-	xt0 = xt;
+	M5.Display.drawFastVLine(xt0, 100, 80, TFT_BLACK);
+	M5.Display.drawFastVLine(xt,  100, 80, TFT_GREEN);
+	pt = (uint16_t)(Ton * 32 / 950);
+	M5.Display.drawFastVLine(pt0, 80, 20, TFT_BLACK);
+	M5.Display.drawFastVLine(pt,  80, 20, TFT_CYAN);
+	xt0 = xt; pt0 = pt;
 
 //  printf(">Pos:%f\n", S);	printf(">PosT:%f\n", St);
 /*
