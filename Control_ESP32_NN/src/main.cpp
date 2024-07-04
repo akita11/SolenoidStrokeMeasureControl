@@ -9,6 +9,10 @@
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "model.h"  // Include the model header file
 
+// Position prediction using NN:
+// https://chatgpt.com/share/ebc162db-142f-42d8-82a9-fdc115fb7b4f
+// train https://colab.research.google.com/drive/1bI5E3nJ7u63hwzTXQJca03pLSfpk4v60?usp=sharing
+
 // Define the TensorFlow Lite Micro model
 const tflite::Model* model = tflite::GetModel(pos_prediction_model_tflite);
 static tflite::MicroInterpreter* interpreter;
