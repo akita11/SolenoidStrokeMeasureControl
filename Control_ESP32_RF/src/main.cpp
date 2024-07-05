@@ -71,8 +71,8 @@ void timer_task(void *pvParameters){
 //				digitalWrite(PIN_FLAG2, 0);	
 				v0 = v0_;
 				digitalWrite(PIN_FLAG1, 1 - digitalRead(PIN_FLAG1));
-//				printf("%d %.2f\n", Ton, S);
-
+				printf("%d,%.3f,%.3f\n", millis(), S, St);
+				mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
 			}
 		}
 	}
@@ -168,7 +168,7 @@ void loop() {
 	if (Ton_t > Ton_MAX) Ton = Ton_MAX;
 	else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
 	else Ton = Ton_t;
-	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
+//	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
 
 	xt = (uint16_t)((S / 5.0) * 320);
 	M5.Display.drawFastVLine(xt0, 100, 80, TFT_BLACK);
@@ -178,8 +178,7 @@ void loop() {
 	M5.Display.drawFastVLine(pt,  80, 20, TFT_CYAN);
 	xt0 = xt; pt0 = pt;
 
-	printf("%d,%.3f,%.3f\n", millis(), S, St);
 //  printf(">Pos:%f\n", S);	printf(">PosT:%f\n", St); // for Telepolot
-//	delay(1);
-	delay(5);
+	delay(1);
+//	delay(10);
 }
