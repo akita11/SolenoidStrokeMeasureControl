@@ -29,7 +29,10 @@
 #define PIN_FLAG2 14
 
 uint16_t v0, v0_, v1;
-uint16_t Ton = 1000;
+uint16_t Ton = 5000;
+float St = 1.0;
+float S;
+float Kp = 9.0;
 
 volatile SemaphoreHandle_t pwmSemaphore;
 volatile uint8_t st_int = 0;
@@ -53,6 +56,7 @@ void timer_task(void *pvParameters){
 	while(1){
 		if (xSemaphoreTake(pwmSemaphore, 0) == pdTRUE) {
 			if (st_int == 1){
+				// PWM=0->1
 				st_int = 0;
 				delayMicroseconds(100); // after 100us of PWM ON
 //				digitalWrite(PIN_FLAG1, 1);
@@ -60,11 +64,15 @@ void timer_task(void *pvParameters){
 //				digitalWrite(PIN_FLAG1, 0);	
 			}
 			else if (st_int == 2){
+				// 700us after PWM ON
 				st_int = 0;
 //				digitalWrite(PIN_FLAG2, 1);
 				v1 = analogReadMilliVolts(PIN_ADC);
 //				digitalWrite(PIN_FLAG2, 0);	
 				v0 = v0_;
+				digitalWrite(PIN_FLAG1, 1 - digitalRead(PIN_FLAG1));
+//				printf("%d %.2f\n", Ton, S);
+
 			}
 		}
 	}
@@ -81,7 +89,7 @@ void setup() {
   slider_list[0].setup({0, 180, 320, 60}, 0,  500,  100, TFT_WHITE, TFT_BLACK, TFT_LIGHTGRAY);
 
 	// slider for Kp
-  slider_list[1].setup({0, 0, 320, 40}, 0,  1000,  300, TFT_RED, TFT_BLACK, TFT_RED);
+  slider_list[1].setup({0, 0, 320, 40}, 0,  1000,  (int)(Kp*100), TFT_RED, TFT_BLACK, TFT_RED);
 
   M5.Display.setEpdMode(epd_mode_t::epd_fastest);
   for (std::size_t i = 0; i < slider_count; ++i) slider_list[i].draw();
@@ -114,11 +122,9 @@ uint8_t iTon = 0;
 
 uint16_t xt, xt0;
 uint16_t pt, pt0;
-float St = 1.0;
-float S;
-float Kp = 3.0;
 
 void loop() {
+	// 1 cycle ~ 5ms
 	M5.update();
 
   bool changed = false;
@@ -137,13 +143,6 @@ void loop() {
 		}
 	}
 /*
-	if (M5.BtnA.wasClicked()){
-		iTon = (iTon + 1) % 9;
-		Ton = (iTon + 1) * 1000;
-		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // 1ms, PWM ON
-	}
-*/
-/*
 	// for test, set Ton by slider
 	if (slider_list[1].update(t)) {
   	if (slider_list[1].wasChanged()){
@@ -156,17 +155,14 @@ void loop() {
 		}
 	}
 */
-	float param[3];
-  param[0] = (float)Ton / 1000; param[1] = (float)v0; param[2] = (float)v1;
-	S = predict_pos(param);
 
-	printf("%d %.2f\n", Ton, S);
-	// Position Control
+	// Position Measure
+	float param[3];
+	param[0] = (float)Ton / 1000; param[1] = (float)v0; param[2] = (float)v1;
 	S = predict_pos(param);
+	// Position Control
 	int16_t dTon = (uint16_t)((St - S) * Kp);
 	int16_t Ton_t = Ton + dTon;
-//#define Ton_MAX 9000
-//#define Ton_MIN 1000
 #define Ton_MAX 9500
 #define Ton_MIN 1000
 	if (Ton_t > Ton_MAX) Ton = Ton_MAX;
@@ -174,7 +170,6 @@ void loop() {
 	else Ton = Ton_t;
 	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
 
-//	printf("%.2f %.2f %.2f %d %d\n", Kp, S, St, Ton, dTon);
 	xt = (uint16_t)((S / 5.0) * 320);
 	M5.Display.drawFastVLine(xt0, 100, 80, TFT_BLACK);
 	M5.Display.drawFastVLine(xt,  100, 80, TFT_GREEN);
@@ -183,13 +178,8 @@ void loop() {
 	M5.Display.drawFastVLine(pt,  80, 20, TFT_CYAN);
 	xt0 = xt; pt0 = pt;
 
-//  printf(">Pos:%f\n", S);	printf(">PosT:%f\n", St);
-/*
-	M5.Display.fillRect(0, 0, 320, 50, BLACK);
-	M5.Display.setCursor(0, 0);
-	M5.Display.printf("S:%.2f St:%.2f", S, St);
-	M5.Display.setCursor(0, 20);
-	M5.Display.printf("Ton:%d", Ton);
-*/
-	delay(1);
+	printf("%d,%.3f,%.3f\n", millis(), S, St);
+//  printf(">Pos:%f\n", S);	printf(">PosT:%f\n", St); // for Telepolot
+//	delay(1);
+	delay(5);
 }
