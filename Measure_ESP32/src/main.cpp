@@ -36,6 +36,7 @@ M5_KMeter sensor;
 #define BM_INT_OP0_TEA	(1 << 15)
 #define BM_INT_OP0_TEB	(1 << 18)
 
+/*
 // for Core2
 // for PortA
 #define PIN_PWM 32
@@ -43,16 +44,15 @@ M5_KMeter sensor;
 // for PortC
 #define PIN_FLAG1 13
 #define PIN_FLAG2 14
+*/
 
-/*
-// fore CoreS3SE
+// for CoreS3SE
 // for PortA
 #define PIN_PWM 2
 #define PIN_ADC 1
 // for PortC
 #define PIN_FLAG1 6
 #define PIN_FLAG2 7
-*/
 
 uint8_t n = 0;
 uint8_t N = 16; 
@@ -89,7 +89,7 @@ void timer_task(void *pvParameters){
 				digitalWrite(PIN_FLAG1, 1);	
 				digitalWrite(PIN_FLAG1, 0);
 				v0s += analogReadMilliVolts(PIN_ADC);
-
+/*
 //				delayMicroseconds(100); // after 200us of PWM ON
 				digitalWrite(PIN_FLAG1, 1);	
 				digitalWrite(PIN_FLAG1, 0);
@@ -109,6 +109,7 @@ void timer_task(void *pvParameters){
 				digitalWrite(PIN_FLAG1, 1);	
 				digitalWrite(PIN_FLAG1, 0);
 				vm3s += analogReadMilliVolts(PIN_ADC);
+*/
 			}
 			else if (st_int == 2){
 				st_int = 0;
@@ -121,10 +122,12 @@ void timer_task(void *pvParameters){
 					n = 0;
 					v0 = v0s / N; v0s = 0;
 					v1 = v1s / N; v1s = 0;
+/*
 					vm0 = vm0s / N; vm0s = 0;
 					vm1 = vm1s / N; vm1s = 0;
 					vm2 = vm2s / N; vm2s = 0;
 					vm3 = vm3s / N; vm3s = 0;
+*/
 				}
 			}
 		}
@@ -200,17 +203,19 @@ void loop()
 			v0s = 0; v1s = 0; n = 0;
 			v[iTon][0] = v0;
 			v[iTon][1] = v1;
+/*
 			v[iTon][2] = vm0;
 			v[iTon][3] = vm1;
 			v[iTon][4] = vm2;
 			v[iTon][5] = vm3;
+*/
 #ifdef MEASURE_TEMP
 			sensor.update();
 			float tmp = sensor.getTemperature();
 			printf("%d,%d,%d,%f\n", iTon + 1, v[iTon][0], v[iTon][1], tmp);
 #endif
-//			printf("%d,%d,%d\n", iTon + 1, v[iTon][0], v[iTon][1]);
-			printf("%d,%d,%d,%d,%d,%d,%d\n", iTon + 1, v[iTon][0], v[iTon][1], v[iTon][2], v[iTon][3], v[iTon][4], v[iTon][5]);
+			printf("%d,%d,%d\n", iTon + 1, v[iTon][0], v[iTon][1]);
+//			printf("%d,%d,%d,%d,%d,%d,%d\n", iTon + 1, v[iTon][0], v[iTon][1], v[iTon][2], v[iTon][3], v[iTon][4], v[iTon][5]);
 			M5.Display.printf("%d,%d,%d\n", iTon + 1, v[iTon][0], v[iTon][1]);
 		}
 		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0); // PWM OFF (cool down)
