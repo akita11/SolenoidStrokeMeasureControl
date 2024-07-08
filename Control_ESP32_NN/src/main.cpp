@@ -2,7 +2,7 @@
 #include <M5Unified.h>
 
 //#include <TensorFlowLite_ESP32.h>
-#include <TensorFlowLite.h>
+//#include <TensorFlowLite.h>
 #include "tensorflow/lite/micro/all_ops_resolver.h"
 //#include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
@@ -26,6 +26,7 @@ void setup() {
   static tflite::MicroMutableOpResolver<10> resolver;
 //  tflite::MicroErrorReporter micro_error_reporter;
 //  interpreter = new tflite::MicroInterpreter(model, resolver, tensor_arena, sizeof(tensor_arena), &micro_error_reporter);
+  interpreter = new tflite::MicroInterpreter(model, resolver, tensor_arena, sizeof(tensor_arena));
 
   // Allocate memory from the tensor_arena for the model's tensors
   interpreter->AllocateTensors();
