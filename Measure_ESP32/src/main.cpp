@@ -60,8 +60,11 @@ uint8_t N = 16;
 uint16_t v0s, v1s, vm0s, vm1s, vm2s, vm3s;
 uint16_t v0, v1, vm0, vm1, vm2, vm3;
 
-uint16_t Ton = 1000;
-uint16_t Delay = 100;
+//uint16_t Ton = 1000;
+//uint16_t Delay = 100;
+
+uint16_t Ton0[] = {1000, 500}; // [us]
+uint16_t Tv1[] = {700, 400}; // [us]
 
 volatile SemaphoreHandle_t pwmSemaphore;
 volatile uint8_t st_int = 0;
@@ -88,8 +91,8 @@ void timer_task(void *pvParameters){
 				st_int = 0;
 				delayMicroseconds(100); // after 100us of PWM ON
 				digitalWrite(PIN_FLAG1, 1);	
-				digitalWrite(PIN_FLAG1, 0);
 				v0s += analogReadMilliVolts(PIN_ADC);
+				digitalWrite(PIN_FLAG1, 0);
 /*
 //				delayMicroseconds(100); // after 200us of PWM ON
 				digitalWrite(PIN_FLAG1, 1);	
@@ -150,16 +153,22 @@ void setup() {
 
 	mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, PIN_PWM);
 
+	// Ton0[]=1000/500[us] -> Tcycle=10*Ton[0]=10000/5000[us] -> f=1000000/Tcycle
 	mcpwm_config_t pwm_config;
-	pwm_config.frequency = 100; // 100Hz,
+	pwm_config.frequency = 100000/Ton0[0]; // 100Hz,
 	pwm_config.cmpr_a = 0; // duty cycle for A
 	pwm_config.cmpr_b = 0; // duty cycle for B
 	pwm_config.counter_mode = MCPWM_UP_COUNTER;
 	pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // active high
 	mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,  &pwm_config);
 
-	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 1000); // 1ms, PWM ON
-	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 700); // 700us
+//	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 1000); // 1ms, PWM ON
+//	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 700); // 700us
+//	f=Treq[Hz], T=1000/f[ms]
+// 100Hz/200Hz -> 10ms/5ms -> 1ms/0.5ms
+	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton0[0]); // 10% duyty
+	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, Tv1[0]); // 700 / 400us
+
 	MCPWM0.int_ena.val |= BM_INT_TIMER0_TEZ; // interrupt at PWM ON
 	MCPWM0.int_ena.val |= BM_INT_OP0_TEB;    // interrupt at RegB match
 	ESP_ERROR_CHECK(mcpwm_isr_register(MCPWM_UNIT_0, isr_handler, NULL, ESP_INTR_FLAG_IRAM, NULL));
@@ -193,17 +202,27 @@ void loop()
 #ifdef MEASURE_TEMP
 		for (lp = 0; lp < 100; lp++){ // for 100 trials
 #endif
-		M5.Display.fillRect(0, 20, 320, 240, TFT_BLACK);
-		M5.Display.setCursor(0, 20);
 		int v[9][6];
 		uint8_t iTon, iDelay;;
-		for (iTon = 0; iTon < 9; iTon++){
-			Ton = iTon * 1000 + 1000;
-			mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
-			delay(2000);
-			v0s = 0; v1s = 0; n = 0;
-			v[iTon][0] = v0;
-			v[iTon][1] = v1;
+		uint16_t Ton;
+		for (uint8_t f = 0; f < 2; f++){
+			M5.Display.fillRect(0, 20, 320, 240, TFT_BLACK);
+			M5.Display.setCursor(0, 20);
+			mcpwm_config_t pwm_config;
+			pwm_config.frequency = 100000/Ton0[f]; // 100Hz,
+			pwm_config.cmpr_a = 0; // duty cycle for A
+			pwm_config.cmpr_b = 0; // duty cycle for B
+			pwm_config.counter_mode = MCPWM_UP_COUNTER;
+			pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // active high
+			mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,  &pwm_config);
+			mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, Tv1[f]);
+			for (iTon = 0; iTon < 9; iTon++){
+				Ton = iTon * Ton0[f] + Ton0[f];
+				mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
+				delay(1000);
+				v0s = 0; v1s = 0; n = 0;
+				v[iTon][0] = v0;
+				v[iTon][1] = v1;
 /*
 			v[iTon][2] = vm0;
 			v[iTon][3] = vm1;
@@ -215,9 +234,9 @@ void loop()
 			float tmp = sensor.getTemperature();
 			printf("%d,%d,%d,%f\n", iTon + 1, v[iTon][0], v[iTon][1], tmp);
 #endif
-			printf("%d,%d,%d\n", iTon + 1, v[iTon][0], v[iTon][1]);
-//			printf("%d,%d,%d,%d,%d,%d,%d\n", iTon + 1, v[iTon][0], v[iTon][1], v[iTon][2], v[iTon][3], v[iTon][4], v[iTon][5]);
-			M5.Display.printf("%d,%d,%d\n", iTon + 1, v[iTon][0], v[iTon][1]);
+				printf("%d,%d,%d,%d\n", Ton0[f], iTon + 1, v[iTon][0], v[iTon][1]);
+				M5.Display.printf("%d,%d,%d,%d\n", Ton0[f], iTon + 1, v[iTon][0], v[iTon][1]);
+			}
 		}
 		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0); // PWM OFF (cool down)
 #ifdef MEASURE_TEMP
