@@ -36,7 +36,7 @@ M5_KMeter sensor;
 #define BM_INT_OP0_TEA	(1 << 15)
 #define BM_INT_OP0_TEB	(1 << 18)
 
-/*
+#if defined(ARDUINO_M5STACK_Core2)
 // for Core2
 // for PortA
 #define PIN_PWM 32
@@ -44,8 +44,8 @@ M5_KMeter sensor;
 // for PortC
 #define PIN_FLAG1 13
 #define PIN_FLAG2 14
-*/
 
+#elif defined( ARDUINO_M5STACK_CORES3 )
 // for CoreS3SE
 // for PortA
 #define PIN_PWM 2
@@ -53,6 +53,7 @@ M5_KMeter sensor;
 // for PortC
 #define PIN_FLAG1 6
 #define PIN_FLAG2 7
+#endif
 
 uint8_t n = 0;
 uint8_t N = 16; 
