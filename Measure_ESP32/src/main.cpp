@@ -65,7 +65,7 @@ uint16_t v0, v1, vm0, vm1, vm2, vm3;
 
 uint16_t Ton0[] = {1000, 500}; // [us]
 uint16_t Tv1[] = {700, 400}; // [us]
-
+uint8_t iToni[] = {1, 9, 2, 8, 3, 7, 4, 6, 5};
 volatile SemaphoreHandle_t pwmSemaphore;
 volatile uint8_t st_int = 0;
 
@@ -205,24 +205,25 @@ void loop()
 		int v[9][6];
 		uint8_t iTon, iDelay;;
 		uint16_t Ton;
-		for (uint8_t f = 0; f < 2; f++){
-			M5.Display.fillRect(0, 20, 320, 240, TFT_BLACK);
-			M5.Display.setCursor(0, 20);
-			mcpwm_config_t pwm_config;
-			pwm_config.frequency = 100000/Ton0[f]; // 100Hz,
-			pwm_config.cmpr_a = 0; // duty cycle for A
-			pwm_config.cmpr_b = 0; // duty cycle for B
-			pwm_config.counter_mode = MCPWM_UP_COUNTER;
-			pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // active high
-			mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,  &pwm_config);
-			mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, Tv1[f]);
-			for (iTon = 0; iTon < 9; iTon++){
-				Ton = iTon * Ton0[f] + Ton0[f];
-				mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
-				delay(1000);
-				v0s = 0; v1s = 0; n = 0;
-				v[iTon][0] = v0;
-				v[iTon][1] = v1;
+		for (uint8_t n = 0; n < 5; n++){
+			for (uint8_t f = 0; f < 2; f++){
+				M5.Display.fillRect(0, 20, 320, 240, TFT_BLACK);
+				M5.Display.setCursor(0, 20);
+				mcpwm_config_t pwm_config;
+				pwm_config.frequency = 100000/Ton0[f]; // 100Hz,
+				pwm_config.cmpr_a = 0; // duty cycle for A
+				pwm_config.cmpr_b = 0; // duty cycle for B
+				pwm_config.counter_mode = MCPWM_UP_COUNTER;
+				pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // active high
+				mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,  &pwm_config);
+				mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, Tv1[f]);
+				for (iTon = 0; iTon < 9; iTon++){
+					Ton = iToni[iTon] * Ton0[f] + Ton0[f];
+					mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
+					delay(1000);
+					v0s = 0; v1s = 0; n = 0;
+					v[iTon][0] = v0;
+					v[iTon][1] = v1;
 /*
 			v[iTon][2] = vm0;
 			v[iTon][3] = vm1;
@@ -234,15 +235,16 @@ void loop()
 			float tmp = sensor.getTemperature();
 			printf("%d,%d,%d,%f\n", iTon + 1, v[iTon][0], v[iTon][1], tmp);
 #endif
-				printf("%d,%d,%d,%d\n", Ton0[f], iTon + 1, v[iTon][0], v[iTon][1]);
-				M5.Display.printf("%d,%d,%d,%d\n", Ton0[f], iTon + 1, v[iTon][0], v[iTon][1]);
+					printf("%d,%d,%d,%d\n", Ton0[f], iToni[iTon], v[iTon][0], v[iTon][1]);
+					M5.Display.printf("%d,%d,%d,%d\n", Ton0[f], iToni[iTon], v[iTon][0], v[iTon][1]);
+				}
 			}
-		}
-		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0); // PWM OFF (cool down)
+			mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0); // PWM OFF (cool down)
 #ifdef MEASURE_TEMP
 		for (uint8_t w = 0; w < 240; w++) delay(1000); // wait for 4min to cool down
 		}
 #endif
+		}
 		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0); // PWM OFF
 		fMeasure = 0;
 	}
