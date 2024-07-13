@@ -202,7 +202,7 @@ void loop()
 #ifdef MEASURE_TEMP
 		for (lp = 0; lp < 100; lp++){ // for 100 trials
 #endif
-		int v[9][6];
+		int v[9][6][2][5];
 		uint8_t iTon, iDelay;;
 		uint16_t Ton;
 		for (uint8_t n = 0; n < 5; n++){
@@ -222,8 +222,8 @@ void loop()
 					mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
 					delay(1000);
 					v0s = 0; v1s = 0; n = 0;
-					v[iTon][0] = v0;
-					v[iTon][1] = v1;
+					v[iTon][0][f][n] = v0;
+					v[iTon][1][f][n] = v1;
 /*
 			v[iTon][2] = vm0;
 			v[iTon][3] = vm1;
@@ -235,7 +235,6 @@ void loop()
 			float tmp = sensor.getTemperature();
 			printf("%d,%d,%d,%f\n", iTon + 1, v[iTon][0], v[iTon][1], tmp);
 #endif
-					printf("%d,%d,%d,%d\n", Ton0[f], iToni[iTon], v[iTon][0], v[iTon][1]);
 					M5.Display.printf("%d,%d,%d,%d\n", Ton0[f], iToni[iTon], v[iTon][0], v[iTon][1]);
 				}
 			}
@@ -245,6 +244,27 @@ void loop()
 		}
 #endif
 		}
+		for (iTon = 0; iTon < 9; iTon++){
+			for (uint8_t f = 0; f < 2; f++){
+				Ton = iToni[iTon] * Ton0[f] + Ton0[f];
+				printf("%d,", Ton);
+				uint32_t s0 = 0, s1 = 0;
+				for (uint8_t n = 0; n < 5; n++){
+					s0 += v[iTon][0][f][n];
+					s1 += v[iTon][1][f][n];
+				}
+				printf("%.2f, %.2f,", (float)v[iTon][0][f][n]/5.0, (float)v[iTon][1][f][n]/5.0);
+			}
+			for (uint8_t f = 0; f < 2; f++){
+				for (uint8_t n = 0; n < 5; n++){
+					printf("%d,%d,", v[iTon][0][f][n], v[iTon][1][f][n]);
+				}
+			}
+			printf("\n");
+		}
+
+
+		
 		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0); // PWM OFF
 		fMeasure = 0;
 	}
