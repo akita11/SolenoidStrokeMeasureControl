@@ -1,4 +1,16 @@
-/* Copyright 2019 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2024 Chirale, TensorFlow Authors. All Rights Reserved.
+
+This sketch is derived from the classic Hello World example of the general 
+TensorFlow Lite Micro library. It has been adapted and simplified by Chirale 
+to conform to the typical style of Arduino sketches. 
+It has been tested on an Arduino Nano 33 BLE.
+The sketch implements a Deep Neural Network pre-trained on calculating 
+the function sin(x). 
+By sending a value between 0 and 2*Pi via the Serial Monitor, 
+both the value inferred by the DNN model and the actual value 
+calculated using the Arduino math library are displayed.
+
+It shows how to use TensorFlow Lite Library on Arduino.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,46 +25,93 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-//#include <TensorFlowLite.h>
-#include "Adafruit_TFLite.h"
+// include main library header file
+#include <Chirale_TensorFlowLite.h>
 
-#include "output_handler.h"
-#include "SolPosSSBH0830_model.h"
+// include static array definition of pre-trained model
+#include "SolPosSSBH0830_model.h"  // 生成したヘッダーファイル
 
-// Create an area of memory to use for input, output, and intermediate arrays.
-// Finding the minimum value for your model may require some trial and error.
-const int kTensorAreaSize  (2 * 1024);
+// This TensorFlow Lite Micro Library for Arduino is not similar to standard
+// Arduino libraries. These additional header files must be included.
+#include "tensorflow/lite/micro/all_ops_resolver.h"
+#include "tensorflow/lite/micro/micro_interpreter.h"
+#include "tensorflow/lite/schema/schema_generated.h"
 
-// Will need tuning for your chipset
-const int kInferencesPerCycle = 200;
+// Globals pointers, used to address TensorFlow Lite components.
+// Pointers are not usual in Arduino sketches, future versions of
+// the library may change this...
+const tflite::Model* model = nullptr;
+tflite::MicroInterpreter* interpreter = nullptr;
+TfLiteTensor* input = nullptr;
+TfLiteTensor* output = nullptr;
 
-Adafruit_TFLite ada_tflite(kTensorAreaSize);
+// There is no way to calculate this parameter
+// the value is usually determined by trial and errors
+// It is the dimension of the memory area used by the TFLite interpreter
+// to store tensors and intermediate results
+constexpr int kTensorArenaSize = 2000;
+
+// Keep aligned to 16 bytes for CMSIS (Cortex Microcontroller Software Interface Standard)
+// alignas(16) directive is used to specify that the array 
+// should be stored in memory at an address that is a multiple of 16.
+alignas(16) uint8_t tensor_arena[kTensorArenaSize];
+
 
 void setup() {
-	M5.begin()
-	if (! ada_tflite.loadModel(g_model)) {
-		printf("Failed to load default model\n");
+  // Initialize serial communications and wait for Serial Monitor to be opened
+  Serial.begin(115200);
+  while(!Serial);
+
+  // Map the model into a usable data structure. This doesn't involve any
+  // copying or parsing, it's a very lightweight operation.
+  model = tflite::GetModel(g_model);
+
+  // Check if model and library have compatible schema version,
+  // if not, there is a misalignement between TensorFlow version used
+  // to train and generate the TFLite model and the current version of library
+  if (model->version() != TFLITE_SCHEMA_VERSION) {
+    Serial.println("Model provided and schema version are not equal!");
+    while(true); // stop program here
   }
-  printf("OK\n");
+
+  // This pulls in all the TensorFlow Lite operators.
+  static tflite::AllOpsResolver resolver;
+
+  // Build an interpreter to run the model with.
+  static tflite::MicroInterpreter static_interpreter(
+      model, resolver, tensor_arena, kTensorArenaSize);
+  interpreter = &static_interpreter;
+
+  // Allocate memory from the tensor_arena for the model's tensors.
+  // if an error occurs, stop the program.
+  TfLiteStatus allocate_status = interpreter->AllocateTensors();
+  if (allocate_status != kTfLiteOk) {
+    Serial.println("AllocateTensors() failed");
+    while(true); // stop program here
+  }
 
 }
 
-void loop() {
-  ada_tflite.input->data.f[0] = 1.0;
-  ada_tflite.input->data.f[1] = 479.0;
-  ada_tflite.input->data.f[2] = 1129.0;
 
-  TfLiteStatus invoke_status = ada_tflite.interpreter->Invoke();
+void loop() {
+  // Obtain pointers to the model's input and output tensors.
+  input = interpreter->input(0);
+  output = interpreter->output(0);
+
+  Serial.println("Initialization done.");
+
+  input->data.f[0] = 1.0;
+  input->data.f[1] = 479.0;
+  input->data.f[2] = 1129.0;
+
+  // Run inference, and report if an error occurs
+  TfLiteStatus invoke_status = interpreter->Invoke();
   if (invoke_status != kTfLiteOk) {
-    printf("Invoke failed\n");
+    Serial.println("Invoke failed!");
+    return;
   }
 
-  // Read the predicted y value from the model's output tensor
-  float pos = ada_tflite.output->data.f[0];
-	printf("pos=%f\n", pos);
-
-//  // Output the results. A custom HandleOutput function can be implemented
-//  // for each supported hardware target.
-//  HandleOutput(ada_tflite.error_reporter, x_val, y_val);
-
+  // Obtain the quantized output from model's output tensor
+  Serial.println(output->data.f[0]);
+  delay(1000);
 }
