@@ -205,10 +205,11 @@ void loop()
 		int v[9][6][2][5];
 		uint8_t iTon, iDelay;;
 		uint16_t Ton;
-		for (uint8_t n = 0; n < 5; n++){
+		for (uint8_t ns = 0; ns < 5; ns++){
 			for (uint8_t f = 0; f < 2; f++){
-				M5.Display.fillRect(0, 20, 320, 240, TFT_BLACK);
-				M5.Display.setCursor(0, 20);
+			M5.Display.clear(TFT_BLACK);
+				M5.Display.setCursor(0, 0);
+				M5.Display.printf("n=%d f=%d\n", ns, f);
 				mcpwm_config_t pwm_config;
 				pwm_config.frequency = 100000/Ton0[f]; // 100Hz,
 				pwm_config.cmpr_a = 0; // duty cycle for A
@@ -220,10 +221,10 @@ void loop()
 				for (iTon = 0; iTon < 9; iTon++){
 					Ton = iToni[iTon] * Ton0[f] + Ton0[f];
 					mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
-					delay(1000);
 					v0s = 0; v1s = 0; n = 0;
-					v[iTon][0][f][n] = v0;
-					v[iTon][1][f][n] = v1;
+					delay(1000);
+					v[iTon][0][f][ns] = v0;
+					v[iTon][1][f][ns] = v1;
 /*
 			v[iTon][2] = vm0;
 			v[iTon][3] = vm1;
@@ -235,7 +236,7 @@ void loop()
 			float tmp = sensor.getTemperature();
 			printf("%d,%d,%d,%f\n", iTon + 1, v[iTon][0], v[iTon][1], tmp);
 #endif
-					M5.Display.printf("%d,%d,%d,%d\n", Ton0[f], iToni[iTon], v[iTon][0], v[iTon][1]);
+					M5.Display.printf("%d,%d,%d,%d\n", Ton0[f], iToni[iTon], v[iTon][0][f][ns], v[iTon][1][f][ns]);
 				}
 			}
 			mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0); // PWM OFF (cool down)
@@ -249,23 +250,24 @@ void loop()
 				Ton = iToni[iTon] * Ton0[f] + Ton0[f];
 				printf("%d,", Ton);
 				uint32_t s0 = 0, s1 = 0;
-				for (uint8_t n = 0; n < 5; n++){
-					s0 += v[iTon][0][f][n];
-					s1 += v[iTon][1][f][n];
+				for (uint8_t ns = 0; ns < 5; ns++){
+					s0 += v[iTon][0][f][ns];
+					s1 += v[iTon][1][f][ns];
 				}
-				printf("%.2f, %.2f,", (float)v[iTon][0][f][n]/5.0, (float)v[iTon][1][f][n]/5.0);
+				printf("%.2f,%.2f,", (float)s0/5.0, (float)s1/5.0);
 			}
 			for (uint8_t f = 0; f < 2; f++){
-				for (uint8_t n = 0; n < 5; n++){
-					printf("%d,%d,", v[iTon][0][f][n], v[iTon][1][f][n]);
+				for (uint8_t ns = 0; ns < 5; ns++){
+					printf("%d,%d,", v[iTon][0][f][ns], v[iTon][1][f][ns]);
 				}
 			}
 			printf("\n");
 		}
-
-
 		
 		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0); // PWM OFF
 		fMeasure = 0;
+		M5.Display.clear(TFT_BLACK);
+		M5.Display.setCursor(0, 0);
+		M5.Display.printf("BtnA to start\n");
 	}
 }
