@@ -34,6 +34,7 @@ uint8_t tensor_arena[kTensorArenaSize];
 #define BM_INT_OP0_TEA	(1 << 15)
 #define BM_INT_OP0_TEB	(1 << 18)
 
+/*
 // for Core2
 // for PortA
 #define PIN_PWM 32
@@ -41,8 +42,9 @@ uint8_t tensor_arena[kTensorArenaSize];
 // for PortC
 #define PIN_FLAG1 13
 #define PIN_FLAG2 14
+*/
 
-#if defined(ARDUINO_M5STACK_Core2)
+#if defined(ARDUINO_M5STACK_CORE2)
 // for Core2
 // for PortA
 #define PIN_PWM 32
@@ -60,7 +62,7 @@ uint8_t tensor_arena[kTensorArenaSize];
 #define PIN_FLAG1 6
 #define PIN_FLAG2 7
 #else
-//#error "No pin definition for this board"
+#error "No pin definition for this board"
 #endif
 
 uint16_t v0, v0_, v1;
