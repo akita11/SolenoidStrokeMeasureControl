@@ -3,7 +3,9 @@
 // running TensorFlowLite on ESP32/ESP32-S3
 // based on Chirale-TensorFlowLite's example, hello_world
 // using M5Stack Core2/S3SE　with library: https://github.com/spaziochirale/Chirale_TensorFlowLite
+// Licensed under the Apache License, Version 2.0 (the "License");
 //
+// based on "hello_world" in Chirale-TenfowFlowLite
 // Copyright 2024 Chirale, TensorFlow Authors. All Rights Reserved.
 // Licensed under the Apache License, Version 2.0 (the "License");
 
@@ -11,12 +13,12 @@
 #include "driver/gpio.h"
 #include "driver/mcpwm.h"
 #include "soc/mcpwm_reg.h"
-#include "soc/mcpwm_struct.h"
+#include "soc/mcpwm_struct.h"   
 #include "SliderUI.h"
 
 #include <Chirale_TensorFlowLite.h>
 
-#include "SolPosSSBH0830_model.h"  // generated model file
+#include "SolPosSSBH0830_model2.h"  // generated model file
 
 #include "tensorflow/lite/micro/all_ops_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
@@ -108,7 +110,7 @@ void timer_task(void *pvParameters){
 //				digitalWrite(PIN_FLAG2, 0);	
 				v0 = v0_;
 				digitalWrite(PIN_FLAG1, 1 - digitalRead(PIN_FLAG1));
-				printf("%d,%.3f,%.3f\n", millis(), S, St);
+//				printf("%d,%.3f,%.3f\n", millis(), S, St);
 				mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
 			}
 		}
@@ -118,17 +120,36 @@ void timer_task(void *pvParameters){
 static constexpr std::size_t slider_count = 2;
 static slider_t slider_list[slider_count];
 
-float predict_pos(float Ton, float v0, float v1)
+float predict_pos(float t, float V0, float V1)
 {
-  input->data.f[0] = (Ton - scale_mean[0]) / scale_scale[0];
-  input->data.f[1] = (v0  - scale_mean[1]) / scale_scale[1];
-  input->data.f[2] = (v1  - scale_mean[2]) / scale_scale[2];
+  input->data.f[0] = (t - scale_i_mean[0]) / scale_i_scale[0];
+  input->data.f[1] = (V0  - scale_i_mean[1]) / scale_i_scale[1];
+  input->data.f[2] = (V1  - scale_i_mean[2]) / scale_i_scale[2];
   // Run inference, and report if an error occurs
   TfLiteStatus invoke_status = interpreter->Invoke();
-  if (invoke_status != kTfLiteOk) printf("Invoke failed\n");
-  return(output->data.f[0]);
+  if (invoke_status != kTfLiteOk) {
+    Serial.println("Invoke failed!");
+    while(1);
+  }
+  float pos = output->data.f[0] * scale_o_scale[0] + scale_o_mean[0];
+  return(pos);
 }
-
+/*
+float predict_tmp(float Ton, float v0, float v1)
+{
+  input->data.f[0] = (Ton - scale_i_mean[0]) / scale_i_scale[0];
+  input->data.f[1] = (v0  - scale_i_mean[1]) / scale_i_scale[1];
+  input->data.f[2] = (v1  - scale_i_mean[2]) / scale_i_scale[2];
+  // Run inference, and report if an error occurs
+  TfLiteStatus invoke_status = interpreter->Invoke();
+  if (invoke_status != kTfLiteOk) {
+    Serial.println("Invoke failed!");
+    while(1);
+  }
+  float tmp = output->data.f[1] * scale_o_scale[1] + scale_o_mean[1];
+  return(tmp);
+}
+*/
 void setup() {
 	M5.begin();
 
@@ -208,7 +229,8 @@ void loop() {
 
   bool changed = false;
   auto t = M5.Touch.getDetail();
-/*
+
+  // for target position by slider
   if (slider_list[0].update(t)) {
     if (slider_list[0].wasChanged()) St = (float)(slider_list[0].getValue()) / 100;
 	}
@@ -221,11 +243,11 @@ void loop() {
 			M5.Display.printf("Kp:%.2f", Kp);
 		}
 	}
-*/
+  /*
 	// for test, set Ton by slider
 	if (slider_list[1].update(t)) {
   	if (slider_list[1].wasChanged()){
-			Ton = (float)(slider_list[1].getValue()) * 10; // slider:0-1000 -> 0-10000 (10ms)
+			Ton = slider_list[1].getValue() * 10; // slider:0-1000 -> 0-10000 (10ms)
 			M5.Display.fillRect(0, 40, 320, 20, TFT_BLACK);
 			M5.Display.setCursor(0, 40);
 			M5.Display.setTextColor(TFT_RED, TFT_BLACK);
@@ -233,17 +255,15 @@ void loop() {
 			mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // 1ms, PWM ON
 		}
 	}
-
+*/
 	// Position Measure
-	S = predict_pos((float)Ton, (float)v0, (float)v1);
-  printf("%.3f\n", S); // for debug
+	S = predict_pos((float)Ton/1000, (float)v0, (float)v1);
 
 	M5.Display.fillRect(0, 1000, 320, 20, TFT_BLACK);
 	M5.Display.setCursor(0, 100);
 	M5.Display.setTextColor(TFT_CYAN, TFT_BLACK);
 	M5.Display.printf("S:%.3f", S);
 
-/*
 	// Position Control
 	int16_t dTon = (uint16_t)((St - S) * Kp);
 	int16_t Ton_t = Ton + dTon;
@@ -252,7 +272,7 @@ void loop() {
 	if (Ton_t > Ton_MAX) Ton = Ton_MAX;
 	else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
 	else Ton = Ton_t;
-//	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
+	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
 
 	xt = (uint16_t)((S / 5.0) * 320);
 	M5.Display.drawFastVLine(xt0, 100, 80, TFT_BLACK);
@@ -261,8 +281,8 @@ void loop() {
 	M5.Display.drawFastVLine(pt0, 80, 20, TFT_BLACK);
 	M5.Display.drawFastVLine(pt,  80, 20, TFT_CYAN);
 	xt0 = xt; pt0 = pt;
-*/
 //  printf(">Pos:%f\n", S);	printf(">PosT:%f\n", St); // for Telepolot
+  printf("%.3f %.3f\n", S, St); // for debug
 	delay(1);
 //	delay(10);
 }
