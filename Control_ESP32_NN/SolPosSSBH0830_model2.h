@@ -1,15 +1,15 @@
 #ifndef MODEL_H
 #define MODEL_H
 
-// (Ton, v0, v1) -> (Pos, Temp)
+// TFLite model for (Ton, v0, v1) -> (Pos, Temp)
 // Scaler Params:
 // x_mean    {5, 948.634, 1314.421}
 // x_scaler  {2.582, 489.577 , 389.811
-// y_mean    {2.5, 32.5}
 // y_scaler  {1.708, 5.590}
 // -> x_scaled = (x - x_mean) / x_scaler
 // -> y = y_scaled * y_scaler + y_mean
 
+// scaling parameters from training
 const float scale_i_mean[] = {5, 948.634, 1314.421};
 const float scale_i_scale[] = {2.582, 489.577 , 389.811};
 const float scale_o_mean[] = {2.5, 32.5};
