@@ -22,6 +22,9 @@
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 
+// set PWM manually, and measure position. No control
+#define TEST
+
 const tflite::Model* model = nullptr;
 tflite::MicroInterpreter* interpreter = nullptr;
 TfLiteTensor* input = nullptr;
@@ -208,7 +211,20 @@ void loop() {
 
   bool changed = false;
   auto t = M5.Touch.getDetail();
-/*
+
+#ifdef TEST
+  // for test, set Ton by slider
+	if (slider_list[1].update(t)) {
+  	if (slider_list[1].wasChanged()){
+			Ton = (float)(slider_list[1].getValue()) * 10; // slider:0-1000 -> 0-10000 (10ms)
+			M5.Display.fillRect(0, 40, 320, 20, TFT_BLACK);
+			M5.Display.setCursor(0, 40);
+			M5.Display.setTextColor(TFT_RED, TFT_BLACK);
+			M5.Display.printf("Ton:%d", Ton);
+			mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // 1ms, PWM ON
+		}
+	}
+#else
   if (slider_list[0].update(t)) {
     if (slider_list[0].wasChanged()) St = (float)(slider_list[0].getValue()) / 100;
 	}
@@ -221,29 +237,18 @@ void loop() {
 			M5.Display.printf("Kp:%.2f", Kp);
 		}
 	}
-*/
-	// for test, set Ton by slider
-	if (slider_list[1].update(t)) {
-  	if (slider_list[1].wasChanged()){
-			Ton = (float)(slider_list[1].getValue()) * 10; // slider:0-1000 -> 0-10000 (10ms)
-			M5.Display.fillRect(0, 40, 320, 20, TFT_BLACK);
-			M5.Display.setCursor(0, 40);
-			M5.Display.setTextColor(TFT_RED, TFT_BLACK);
-			M5.Display.printf("Ton:%d", Ton);
-			mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // 1ms, PWM ON
-		}
-	}
-
+#endif
 	// Position Measure
 	S = predict_pos((float)Ton, (float)v0, (float)v1);
-  printf("%.3f\n", S); // for debug
 
 	M5.Display.fillRect(0, 1000, 320, 20, TFT_BLACK);
 	M5.Display.setCursor(0, 100);
 	M5.Display.setTextColor(TFT_CYAN, TFT_BLACK);
 	M5.Display.printf("S:%.3f", S);
 
-/*
+#ifdef TEST
+  printf("%d,%d,%d,%.3f\n", Ton, v0, v1, S); // for debug
+#else
 	// Position Control
 	int16_t dTon = (uint16_t)((St - S) * Kp);
 	int16_t Ton_t = Ton + dTon;
@@ -252,7 +257,7 @@ void loop() {
 	if (Ton_t > Ton_MAX) Ton = Ton_MAX;
 	else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
 	else Ton = Ton_t;
-//	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
+	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
 
 	xt = (uint16_t)((S / 5.0) * 320);
 	M5.Display.drawFastVLine(xt0, 100, 80, TFT_BLACK);
@@ -261,10 +266,9 @@ void loop() {
 	M5.Display.drawFastVLine(pt0, 80, 20, TFT_BLACK);
 	M5.Display.drawFastVLine(pt,  80, 20, TFT_CYAN);
 	xt0 = xt; pt0 = pt;
-*/
+#endif
 //  printf(">Pos:%f\n", S);	printf(">PosT:%f\n", St); // for Telepolot
 	delay(1);
-//	delay(10);
 }
 
 
