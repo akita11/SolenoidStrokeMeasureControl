@@ -4,7 +4,7 @@
 #include "driver/mcpwm.h"
 #include "soc/mcpwm_reg.h"
 #include "soc/mcpwm_struct.h"
-
+#include "driver/adc.h"
 #include <Wire.h>
 
 //#define MEASURE_TEMP
@@ -40,24 +40,28 @@ M5_KMeter sensor;
 // for Core2
 // for PortA
 #define PIN_PWM 32
-#define PIN_ADC 33
+#define PIN_ADC 33 // ADC1's Ch.5
 // for PortC
 #define PIN_FLAG1 13
 #define PIN_FLAG2 14
+#define ADC_ATTEN   ADC_ATTEN_DB_12
+#define ADC_CHANNEL	ADC1_CHANNEL_5 // 32K_XN / GPIO33
 
 #elif defined( ARDUINO_M5STACK_CORES3 )
 // for CoreS3SE
 // for PortA
 #define PIN_PWM 2
-#define PIN_ADC 1
+#define PIN_ADC 1 // ADC1's Ch.0
 // for PortC
 #define PIN_FLAG1 6
 #define PIN_FLAG2 7
+#define ADC_ATTEN   ADC_ATTEN_DB_12
+#define ADC_CHANNEL	ADC1_CHANNEL_0 // GPIO1
 #endif
 
 uint8_t n = 0;
 uint8_t N = 16; 
-uint16_t v0s, v1s, vm0s, vm1s, vm2s, vm3s;
+uint32_t v0s, v1s, vm0s, vm1s, vm2s, vm3s;
 uint16_t v0, v1, vm0, vm1, vm2, vm3;
 
 //uint16_t Ton = 1000;
@@ -65,7 +69,8 @@ uint16_t v0, v1, vm0, vm1, vm2, vm3;
 
 uint16_t Ton0[] = {1000, 500}; // [us]
 uint16_t Tv1[] = {700, 400}; // [us]
-uint8_t iToni[] = {1, 9, 2, 8, 3, 7, 4, 6, 5};
+//uint8_t iToni[] = {1, 9, 2, 8, 3, 7, 4, 6, 5};
+uint8_t iToni[] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 volatile SemaphoreHandle_t pwmSemaphore;
 volatile uint8_t st_int = 0;
 
@@ -90,48 +95,23 @@ void timer_task(void *pvParameters){
 			if (st_int == 1){
 				st_int = 0;
 				delayMicroseconds(100); // after 100us of PWM ON
-				digitalWrite(PIN_FLAG1, 1);	
-				v0s += analogReadMilliVolts(PIN_ADC);
-				digitalWrite(PIN_FLAG1, 0);
-/*
-//				delayMicroseconds(100); // after 200us of PWM ON
-				digitalWrite(PIN_FLAG1, 1);	
-				digitalWrite(PIN_FLAG1, 0);
-				vm0s += analogReadMilliVolts(PIN_ADC);
-
-//				delayMicroseconds(100); // after 300us of PWM ON
-				digitalWrite(PIN_FLAG1, 1);	
-				digitalWrite(PIN_FLAG1, 0);
-				vm1s += analogReadMilliVolts(PIN_ADC);
-
-//				delayMicroseconds(100); // after 400us of PWM ON
-				digitalWrite(PIN_FLAG1, 1);	
-				digitalWrite(PIN_FLAG1, 0);
-				vm2s += analogReadMilliVolts(PIN_ADC);
-
-//				delayMicroseconds(100); // after 500us of PWM ON
-				digitalWrite(PIN_FLAG1, 1);	
-				digitalWrite(PIN_FLAG1, 0);
-				vm3s += analogReadMilliVolts(PIN_ADC);
-*/
+//				digitalWrite(PIN_FLAG1, 1);	
+//				v0s += analogReadMilliVolts(PIN_ADC);
+    			v0s += adc1_get_raw(ADC_CHANNEL);
+//				digitalWrite(PIN_FLAG1, 0);
 			}
 			else if (st_int == 2){
 				st_int = 0;
-				digitalWrite(PIN_FLAG1, 1);
-				v1s += analogReadMilliVolts(PIN_ADC);
-				digitalWrite(PIN_FLAG1, 0);	
+//				digitalWrite(PIN_FLAG1, 1);
+//				v1s += analogReadMilliVolts(PIN_ADC);
+    			v1s += adc1_get_raw(ADC_CHANNEL);
+//				digitalWrite(PIN_FLAG1, 0);	
 				n++;
 				if (n == N)
 				{
 					n = 0;
 					v0 = v0s / N; v0s = 0;
 					v1 = v1s / N; v1s = 0;
-/*
-					vm0 = vm0s / N; vm0s = 0;
-					vm1 = vm1s / N; vm1s = 0;
-					vm2 = vm2s / N; vm2s = 0;
-					vm3 = vm3s / N; vm3s = 0;
-*/
 				}
 			}
 		}
@@ -162,10 +142,8 @@ void setup() {
 	pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // active high
 	mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,  &pwm_config);
 
-//	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 1000); // 1ms, PWM ON
-//	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 700); // 700us
-//	f=Treq[Hz], T=1000/f[ms]
-// 100Hz/200Hz -> 10ms/5ms -> 1ms/0.5ms
+	//	f=Treq[Hz], T=1000/f[ms]
+	// 100Hz/200Hz -> 10ms/5ms -> 1ms/0.5ms
 	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton0[0]); // 10% duyty
 	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, Tv1[0]); // 700 / 400us
 
@@ -182,6 +160,10 @@ void setup() {
     Wire.begin(14, 13, 400000L); // for PortC (Core2)
 	sensor.begin(&Wire, 0x66);
 #endif
+
+    //ADC1 config
+    ESP_ERROR_CHECK(adc1_config_width(ADC_WIDTH_BIT_12));
+    ESP_ERROR_CHECK(adc1_config_channel_atten(ADC_CHANNEL, ADC_ATTEN));
 }
 
 uint8_t st = 0;
@@ -219,10 +201,11 @@ void loop()
 				mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,  &pwm_config);
 				mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, Tv1[f]);
 				for (iTon = 0; iTon < 9; iTon++){
-					Ton = iToni[iTon] * Ton0[f] + Ton0[f];
+					Ton = iToni[iTon] * Ton0[f];
 					mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
+//					delay(2000);
 					v0s = 0; v1s = 0; n = 0;
-					delay(1000);
+					delay(2000);
 					v[iTon][0][f][ns] = v0;
 					v[iTon][1][f][ns] = v1;
 /*
@@ -247,8 +230,8 @@ void loop()
 		}
 		for (iTon = 0; iTon < 9; iTon++){
 			for (uint8_t f = 0; f < 2; f++){
-				Ton = iToni[iTon] * Ton0[f] + Ton0[f];
-				printf("%d,", Ton);
+				Ton = iToni[iTon] * Ton0[f];
+				printf("%.2f,", (float)Ton/1000);
 				uint32_t s0 = 0, s1 = 0;
 				for (uint8_t ns = 0; ns < 5; ns++){
 					s0 += v[iTon][0][f][ns];

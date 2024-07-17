@@ -37,7 +37,6 @@ uint8_t tensor_arena[kTensorArenaSize];
 #define BM_INT_OP0_TEA	(1 << 15)
 #define BM_INT_OP0_TEB	(1 << 18)
 
-/*
 // for Core2
 // for PortA
 #define PIN_PWM 32
@@ -45,8 +44,7 @@ uint8_t tensor_arena[kTensorArenaSize];
 // for PortC
 #define PIN_FLAG1 13
 #define PIN_FLAG2 14
-*/
-
+/*
 #if defined(ARDUINO_M5STACK_CORE2)
 // for Core2
 // for PortA
@@ -67,6 +65,7 @@ uint8_t tensor_arena[kTensorArenaSize];
 #else
 #error "No pin definition for this board"
 #endif
+*/
 
 uint16_t v0, v0_, v1;
 uint16_t Ton = 5000;
@@ -106,13 +105,14 @@ void timer_task(void *pvParameters){
 			else if (st_int == 2){
 				// 700us after PWM ON
 				st_int = 0;
-//				digitalWrite(PIN_FLAG2, 1);
+//        delayMicroseconds(500);
+//				digitalWrite(PIN_FLAG1, 1);
 				v1 = analogReadMilliVolts(PIN_ADC);
-//				digitalWrite(PIN_FLAG2, 0);	
+//				digitalWrite(PIN_FLAG1, 0);	
 				v0 = v0_;
-				digitalWrite(PIN_FLAG1, 1 - digitalRead(PIN_FLAG1));
-				printf("%d,%.3f,%.3f\n", millis(), S, St);
-				mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
+//				digitalWrite(PIN_FLAG1, 1 - digitalRead(PIN_FLAG1));
+//				printf("%d,%.3f,%.3f\n", millis(), S, St);
+//				mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
 			}
 		}
 	}
@@ -239,7 +239,7 @@ void loop() {
 	}
 #endif
 	// Position Measure
-	S = predict_pos((float)Ton, (float)v0, (float)v1);
+	S = predict_pos((float)Ton/1000.0, (float)v0, (float)v1);
 
 	M5.Display.fillRect(0, 1000, 320, 20, TFT_BLACK);
 	M5.Display.setCursor(0, 100);
