@@ -16,7 +16,7 @@
 
 #include <Chirale_TensorFlowLite.h>
 
-#include "SolPosSSBH0830_model.h"  // generated model file
+#include "SolPosSSBH0830_model.h"	// generated model file
 
 #include "tensorflow/lite/micro/all_ops_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
@@ -37,13 +37,14 @@ uint8_t tensor_arena[kTensorArenaSize];
 #define BM_INT_OP0_TEA	(1 << 15)
 #define BM_INT_OP0_TEB	(1 << 18)
 
-// for Core2
+// for CoreS3SE
 // for PortA
-#define PIN_PWM 32
-#define PIN_ADC 33
+#define PIN_PWM 2
+#define PIN_ADC 1
 // for PortC
-#define PIN_FLAG1 13
-#define PIN_FLAG2 14
+#define PIN_FLAG1 6
+#define PIN_FLAG2 7
+
 /*
 #if defined(ARDUINO_M5STACK_CORE2)
 // for Core2
@@ -70,7 +71,7 @@ uint8_t tensor_arena[kTensorArenaSize];
 uint16_t v0, v0_, v1;
 uint16_t Ton = 5000;
 float St = 1.0;
-float S;
+float S[2];
 float Kp = 9.0;
 
 volatile SemaphoreHandle_t pwmSemaphore;
@@ -79,10 +80,10 @@ volatile uint8_t st_int = 0;
 void IRAM_ATTR isr_handler(void *XX)
 {
 	if (MCPWM0.int_st.val & BM_INT_TIMER0_TEZ){
-	  // interrupt of Timer0 == 0
+		// interrupt of Timer0 == 0
 		st_int = 1;
-  	}
-  	else if (MCPWM0.int_st.val & BM_INT_OP0_TEB){
+		}
+		else if (MCPWM0.int_st.val & BM_INT_OP0_TEB){
 		// interrupt of Timer0 == REGB
 		st_int = 2;
 	}
@@ -105,7 +106,7 @@ void timer_task(void *pvParameters){
 			else if (st_int == 2){
 				// 700us after PWM ON
 				st_int = 0;
-//        delayMicroseconds(500);
+//				delayMicroseconds(500);
 //				digitalWrite(PIN_FLAG1, 1);
 				v1 = analogReadMilliVolts(PIN_ADC);
 //				digitalWrite(PIN_FLAG1, 0);	
@@ -121,15 +122,22 @@ void timer_task(void *pvParameters){
 static constexpr std::size_t slider_count = 2;
 static slider_t slider_list[slider_count];
 
-float predict_pos(float Ton, float v0, float v1)
+float *predict(float Ton, float v0, float v1)
 {
-  input->data.f[0] = (Ton - scale_mean[0]) / scale_scale[0];
-  input->data.f[1] = (v0  - scale_mean[1]) / scale_scale[1];
-  input->data.f[2] = (v1  - scale_mean[2]) / scale_scale[2];
-  // Run inference, and report if an error occurs
-  TfLiteStatus invoke_status = interpreter->Invoke();
-  if (invoke_status != kTfLiteOk) printf("Invoke failed\n");
-  return(output->data.f[0]);
+	float vo[2];
+	input->data.f[0] = (Ton - scale_i_mean[0]) / scale_i_scale[0];
+	input->data.f[1] = (v0	- scale_i_mean[1]) / scale_i_scale[1];
+	input->data.f[2] = (v1	- scale_i_mean[2]) / scale_i_scale[2];
+	// Run inference, and report if an error occurs
+	TfLiteStatus invoke_status = interpreter->Invoke();
+	if (invoke_status != kTfLiteOk) {
+		Serial.println("Invoke failed!");
+		while(1);
+	}
+	vo[0] = output->data.f[0] * scale_o_scale[0] + scale_o_mean[0];
+	vo[1] = output->data.f[1] * scale_o_scale[1] + scale_o_mean[1];
+
+	return(vo);
 }
 
 void setup() {
@@ -137,13 +145,13 @@ void setup() {
 
 	M5.Display.setTextSize(2);
 	// slider for St
-  slider_list[0].setup({0, 180, 320, 60}, 0,  500,  100, TFT_WHITE, TFT_BLACK, TFT_LIGHTGRAY);
+	slider_list[0].setup({0, 180, 320, 60}, 0,	500,	100, TFT_WHITE, TFT_BLACK, TFT_LIGHTGRAY);
 
 	// slider for Kp
-  slider_list[1].setup({0, 0, 320, 40}, 0,  1000,  (int)(Kp*100), TFT_RED, TFT_BLACK, TFT_RED);
+	slider_list[1].setup({0, 0, 320, 40}, 0,	1000,	(int)(Kp*100), TFT_RED, TFT_BLACK, TFT_RED);
 
-  M5.Display.setEpdMode(epd_mode_t::epd_fastest);
-  for (std::size_t i = 0; i < slider_count; ++i) slider_list[i].draw();
+	M5.Display.setEpdMode(epd_mode_t::epd_fastest);
+	for (std::size_t i = 0; i < slider_count; ++i) slider_list[i].draw();
 
 	pwmSemaphore = xSemaphoreCreateBinary();
 
@@ -157,7 +165,7 @@ void setup() {
 	pwm_config.cmpr_b = 0; // duty cycle for B
 	pwm_config.counter_mode = MCPWM_UP_COUNTER;
 	pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // active high
-	mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,  &pwm_config);
+	mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,	&pwm_config);
 
 	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 1000); // 1ms, PWM ON
 	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 700); // 700us
@@ -165,36 +173,36 @@ void setup() {
 	MCPWM0.int_ena.val |= BM_INT_OP0_TEB;
 	ESP_ERROR_CHECK(mcpwm_isr_register(MCPWM_UNIT_0, isr_handler, NULL, ESP_INTR_FLAG_IRAM, NULL));
 
-  // ------------------------------
-  // Setup TensorFlow Lite
-  // ------------------------------
-  // Map the model into a usable data structure. This doesn't involve any
-  // copying or parsing, it's a very lightweight operation.
-  model = tflite::GetModel(g_model);
+	// ------------------------------
+	// Setup TensorFlow Lite
+	// ------------------------------
+	// Map the model into a usable data structure. This doesn't involve any
+	// copying or parsing, it's a very lightweight operation.
+	model = tflite::GetModel(g_model);
 
-  // Check if model and library have compatible schema version,
-  // if not, there is a misalignement between TensorFlow version used
-  // to train and generate the TFLite model and the current version of library
-  if (model->version() != TFLITE_SCHEMA_VERSION) {
-    printf("Model provided and schema version are not equal!\n");
-    while(true);
-  }
-  // This pulls in all the TensorFlow Lite operators.
-  static tflite::AllOpsResolver resolver;
-  // Build an interpreter to run the model with.
-  static tflite::MicroInterpreter static_interpreter(model, resolver, tensor_arena, kTensorArenaSize);
-  interpreter = &static_interpreter;
+	// Check if model and library have compatible schema version,
+	// if not, there is a misalignement between TensorFlow version used
+	// to train and generate the TFLite model and the current version of library
+	if (model->version() != TFLITE_SCHEMA_VERSION) {
+		printf("Model provided and schema version are not equal!\n");
+		while(true);
+	}
+	// This pulls in all the TensorFlow Lite operators.
+	static tflite::AllOpsResolver resolver;
+	// Build an interpreter to run the model with.
+	static tflite::MicroInterpreter static_interpreter(model, resolver, tensor_arena, kTensorArenaSize);
+	interpreter = &static_interpreter;
 
-  // Allocate memory from the tensor_arena for the model's tensors.
-  // if an error occurs, stop the program.
-  TfLiteStatus allocate_status = interpreter->AllocateTensors();
-  if (allocate_status != kTfLiteOk) {
-    printf("AllocateTensors() failed\n");
-    while(true);
-  }
-  // Obtain pointers to the model's input and output tensors.
-  input = interpreter->input(0);
-  output = interpreter->output(0);
+	// Allocate memory from the tensor_arena for the model's tensors.
+	// if an error occurs, stop the program.
+	TfLiteStatus allocate_status = interpreter->AllocateTensors();
+	if (allocate_status != kTfLiteOk) {
+		printf("AllocateTensors() failed\n");
+		while(true);
+	}
+	// Obtain pointers to the model's input and output tensors.
+	input = interpreter->input(0);
+	output = interpreter->output(0);
 
 	disableCore0WDT();
  	xTaskCreateUniversal(timer_task, "task1", 8192, NULL, 2/*=priority*/,	NULL, PRO_CPU_NUM);
@@ -209,13 +217,13 @@ void loop() {
 	// 1 cycle ~ 5ms
 	M5.update();
 
-  bool changed = false;
-  auto t = M5.Touch.getDetail();
+	bool changed = false;
+	auto t = M5.Touch.getDetail();
 
 #ifdef TEST
-  // for test, set Ton by slider
+	// for test, set Ton by slider
 	if (slider_list[1].update(t)) {
-  	if (slider_list[1].wasChanged()){
+		if (slider_list[1].wasChanged()){
 			Ton = (float)(slider_list[1].getValue()) * 10; // slider:0-1000 -> 0-10000 (10ms)
 			M5.Display.fillRect(0, 40, 320, 20, TFT_BLACK);
 			M5.Display.setCursor(0, 40);
@@ -225,11 +233,11 @@ void loop() {
 		}
 	}
 #else
-  if (slider_list[0].update(t)) {
-    if (slider_list[0].wasChanged()) St = (float)(slider_list[0].getValue()) / 100;
+	if (slider_list[0].update(t)) {
+		if (slider_list[0].wasChanged()) St = (float)(slider_list[0].getValue()) / 100;
 	}
 	if (slider_list[1].update(t)) {
-  	if (slider_list[1].wasChanged()){
+		if (slider_list[1].wasChanged()){
 			Kp = (float)(slider_list[1].getValue()) / 100;
 			M5.Display.fillRect(0, 40, 320, 20, TFT_BLACK);
 			M5.Display.setCursor(0, 40);
@@ -239,18 +247,18 @@ void loop() {
 	}
 #endif
 	// Position Measure
-	S = predict_pos((float)Ton/1000.0, (float)v0, (float)v1);
+	S = predict((float)Ton/1000.0, (float)v0, (float)v1);
 
 	M5.Display.fillRect(0, 1000, 320, 20, TFT_BLACK);
 	M5.Display.setCursor(0, 100);
 	M5.Display.setTextColor(TFT_CYAN, TFT_BLACK);
-	M5.Display.printf("S:%.3f", S);
+	M5.Display.printf("S:%.3f / Temp:%.2f", S[0], S[1]);
 
 #ifdef TEST
-  printf("%d,%d,%d,%.3f\n", Ton, v0, v1, S); // for debug
+	printf("%d,%d,%d,%.3f\n", Ton, v0, v1, S[0]); // for debug
 #else
 	// Position Control
-	int16_t dTon = (uint16_t)((St - S) * Kp);
+	int16_t dTon = (uint16_t)((St - S[0]) * Kp);
 	int16_t Ton_t = Ton + dTon;
 #define Ton_MAX 9500
 #define Ton_MIN 1000
@@ -259,15 +267,15 @@ void loop() {
 	else Ton = Ton_t;
 	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
 
-	xt = (uint16_t)((S / 5.0) * 320);
+	xt = (uint16_t)((S[0] / 5.0) * 320);
 	M5.Display.drawFastVLine(xt0, 100, 80, TFT_BLACK);
-	M5.Display.drawFastVLine(xt,  100, 80, TFT_GREEN);
+	M5.Display.drawFastVLine(xt,	100, 80, TFT_GREEN);
 	pt = (uint16_t)(Ton * 32 / 950);
 	M5.Display.drawFastVLine(pt0, 80, 20, TFT_BLACK);
-	M5.Display.drawFastVLine(pt,  80, 20, TFT_CYAN);
+	M5.Display.drawFastVLine(pt,	80, 20, TFT_CYAN);
 	xt0 = xt; pt0 = pt;
 #endif
-//  printf(">Pos:%f\n", S);	printf(">PosT:%f\n", St); // for Telepolot
+//	printf(">Pos:%f\n", S[0]);	printf(">PosT:%f\n", St); // for Telepolot
 	delay(1);
 }
 
