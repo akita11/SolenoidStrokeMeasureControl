@@ -5,6 +5,7 @@
 #include "soc/mcpwm_reg.h"
 #include "soc/mcpwm_struct.h"
 #include "driver/adc.h"
+#include "esp_adc_cal.h"
 #include <Wire.h>
 
 //#define MEASURE_TEMP
@@ -55,14 +56,15 @@ M5_KMeter sensor;
 // for PortC
 #define PIN_FLAG1 6
 #define PIN_FLAG2 7
-#define ADC_ATTEN   ADC_ATTEN_DB_12
 #define ADC_CHANNEL	ADC1_CHANNEL_0 // GPIO1
+#define ADC_ATTEN   ADC_ATTEN_DB_12
+#define ADC_CALI_SCHEME     ESP_ADC_CAL_VAL_EFUSE_TP_FIT
 #endif
 
 uint8_t n = 0;
 uint8_t N = 16; 
-uint32_t v0s, v1s, vm0s, vm1s, vm2s, vm3s;
-uint16_t v0, v1, vm0, vm1, vm2, vm3;
+uint32_t v0s, v1s;
+uint16_t v0, v1;
 
 //uint16_t Ton = 1000;
 //uint16_t Delay = 100;
@@ -73,6 +75,9 @@ uint16_t Tv1[] = {700, 400}; // [us]
 uint8_t iToni[] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 volatile SemaphoreHandle_t pwmSemaphore;
 volatile uint8_t st_int = 0;
+uint8_t fMeasure = 0;
+
+static esp_adc_cal_characteristics_t adc1_chars;
 
 void IRAM_ATTR isr_handler(void *XX)
 {
@@ -89,32 +94,74 @@ void IRAM_ATTR isr_handler(void *XX)
 	MCPWM0.int_clr.val = MCPWM0.int_st.val; // clear interrupt flags
 }
 
+uint32_t nn = 0;
 void timer_task(void *pvParameters){
 	while(1){
 		if (xSemaphoreTake(pwmSemaphore, 0) == pdTRUE) {
-			if (st_int == 1){
-				st_int = 0;
-				delayMicroseconds(100); // after 100us of PWM ON
-//				digitalWrite(PIN_FLAG1, 1);	
-//				v0s += analogReadMilliVolts(PIN_ADC);
-    			v0s += adc1_get_raw(ADC_CHANNEL);
-//				digitalWrite(PIN_FLAG1, 0);
+			M5.update(); // M5.update() makes jitter of ADC timing
+			if (M5.Touch.getDetail().isPressed()){
+				fMeasure = 1;
 			}
-			else if (st_int == 2){
-				st_int = 0;
-//				digitalWrite(PIN_FLAG1, 1);
-//				v1s += analogReadMilliVolts(PIN_ADC);
-    			v1s += adc1_get_raw(ADC_CHANNEL);
-//				digitalWrite(PIN_FLAG1, 0);	
-				n++;
-				if (n == N)
-				{
-					n = 0;
-					v0 = v0s / N; v0s = 0;
-					v1 = v1s / N; v1s = 0;
+			if (fMeasure == 1){
+				int v[9][2][2][5];
+				uint8_t iTon, iDelay;;
+				uint16_t Ton;
+				for (uint8_t ns = 0; ns < 5; ns++){
+					for (uint8_t f = 0; f < 2; f++){
+						M5.Display.clear(TFT_BLACK);
+						M5.Display.setCursor(0, 0);
+						M5.Display.printf("n=%d f=%d\n", ns, f);
+						mcpwm_config_t pwm_config;
+						pwm_config.frequency = 100000/Ton0[f]; // 100Hz,
+						pwm_config.cmpr_a = 0; // duty cycle for A
+						pwm_config.cmpr_b = 0; // duty cycle for B
+						pwm_config.counter_mode = MCPWM_UP_COUNTER;
+						pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // active high
+						mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,  &pwm_config);
+						mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, Tv1[f]);
+						for (iTon = 0; iTon < 9; iTon++){
+							Ton = iToni[iTon] * Ton0[f];
+							mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
+							delay(1000);
+							v0s = 0; v1s = 0; n = 0;
+							delay(2000);
+							v[iTon][0][f][ns] = v0;
+							v[iTon][1][f][ns] = v1;
+#ifdef MEASURE_TEMP
+							sensor.update();
+							float tmp = sensor.getTemperature();
+#endif
+							M5.Display.printf("%d,%d,%d,%d\n", Ton0[f], iToni[iTon], v[iTon][0][f][ns], v[iTon][1][f][ns]);
+						}
+					}
+					mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0); // PWM OFF (cool down)
 				}
+				for (iTon = 0; iTon < 9; iTon++){
+					for (uint8_t f = 0; f < 2; f++){
+						Ton = iToni[iTon] * Ton0[f];
+						printf("%.2f,", (float)Ton/1000);
+						uint32_t s0 = 0, s1 = 0;
+						for (uint8_t ns = 0; ns < 5; ns++){
+							s0 += v[iTon][0][f][ns];
+							s1 += v[iTon][1][f][ns];
+						}
+						printf("%.2f,%.2f,", (float)s0/5.0, (float)s1/5.0);
+					}
+					for (uint8_t f = 0; f < 2; f++){
+						for (uint8_t ns = 0; ns < 5; ns++){
+							printf("%d,%d,", v[iTon][0][f][ns], v[iTon][1][f][ns]);
+						}
+					}
+					printf("\n");
+				}
+				mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0); // PWM OFF
+				fMeasure = 0;
+				M5.Display.clear(TFT_BLACK);
+				M5.Display.setCursor(0, 0);
+				M5.Display.printf("BtnA to start\n");
 			}
 		}
+		delay(1);
 	}
 }
 
@@ -129,7 +176,6 @@ void setup() {
 	pwmSemaphore = xSemaphoreCreateBinary();
 
 	pinMode(PIN_FLAG1, OUTPUT); digitalWrite(PIN_FLAG1, 0);
-//	pinMode(PIN_FLAG2, OUTPUT); digitalWrite(PIN_FLAG2, 0);
 
 	mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, PIN_PWM);
 
@@ -161,96 +207,45 @@ void setup() {
 	sensor.begin(&Wire, 0x66);
 #endif
 
-    //ADC1 config
-    ESP_ERROR_CHECK(adc1_config_width(ADC_WIDTH_BIT_12));
-    ESP_ERROR_CHECK(adc1_config_channel_atten(ADC_CHANNEL, ADC_ATTEN));
+    esp_err_t ret;
+    ret = esp_adc_cal_check_efuse(ADC_CALI_SCHEME);
+    if (ret == ESP_ERR_NOT_SUPPORTED) {
+        ESP_LOGW(TAG, "Calibration scheme not supported, skip software calibration");
+    } else if (ret == ESP_ERR_INVALID_VERSION) {
+        ESP_LOGW(TAG, "eFuse not burnt, skip software calibration");
+    } else if (ret == ESP_OK) {
+        esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN, ADC_WIDTH_BIT_12, 0, &adc1_chars);
+	}
+
+  //ADC1 config
+  ESP_ERROR_CHECK(adc1_config_width(ADC_WIDTH_BIT_12));
+  ESP_ERROR_CHECK(adc1_config_channel_atten(ADC_CHANNEL, ADC_ATTEN));
+
 }
 
 uint8_t st = 0;
-uint16_t tm = 0;
-uint8_t fMeasure = 0;
-
-uint8_t lp = 0;
 
 void loop()
 {
-	M5.update();
-
-//	if (M5.BtnA.wasClicked()){
-	if (M5.Touch.getDetail().isPressed()){
-		fMeasure = 1;
+	if (st_int == 1){
+		st_int = 0;
+		delayMicroseconds(100); // after 100us of PWM ON
+//		digitalWrite(PIN_FLAG1, 1);	
+//		v0s += analogReadMilliVolts(PIN_ADC); // cause jitter of ADC timing
+    v0s += esp_adc_cal_raw_to_voltage(adc1_get_raw(ADC_CHANNEL), &adc1_chars);
+//		digitalWrite(PIN_FLAG1, 0);
 	}
-	if (fMeasure == 1){
-#ifdef MEASURE_TEMP
-		for (lp = 0; lp < 100; lp++){ // for 100 trials
-#endif
-		int v[9][6][2][5];
-		uint8_t iTon, iDelay;;
-		uint16_t Ton;
-		for (uint8_t ns = 0; ns < 5; ns++){
-			for (uint8_t f = 0; f < 2; f++){
-			M5.Display.clear(TFT_BLACK);
-				M5.Display.setCursor(0, 0);
-				M5.Display.printf("n=%d f=%d\n", ns, f);
-				mcpwm_config_t pwm_config;
-				pwm_config.frequency = 100000/Ton0[f]; // 100Hz,
-				pwm_config.cmpr_a = 0; // duty cycle for A
-				pwm_config.cmpr_b = 0; // duty cycle for B
-				pwm_config.counter_mode = MCPWM_UP_COUNTER;
-				pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // active high
-				mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,  &pwm_config);
-				mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, Tv1[f]);
-				for (iTon = 0; iTon < 9; iTon++){
-					Ton = iToni[iTon] * Ton0[f];
-					mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
-//					delay(2000);
-					v0s = 0; v1s = 0; n = 0;
-					delay(2000);
-					v[iTon][0][f][ns] = v0;
-					v[iTon][1][f][ns] = v1;
-/*
-			v[iTon][2] = vm0;
-			v[iTon][3] = vm1;
-			v[iTon][4] = vm2;
-			v[iTon][5] = vm3;
-*/
-#ifdef MEASURE_TEMP
-			sensor.update();
-			float tmp = sensor.getTemperature();
-			printf("%d,%d,%d,%f\n", iTon + 1, v[iTon][0], v[iTon][1], tmp);
-#endif
-					M5.Display.printf("%d,%d,%d,%d\n", Ton0[f], iToni[iTon], v[iTon][0][f][ns], v[iTon][1][f][ns]);
-				}
-			}
-			mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0); // PWM OFF (cool down)
-#ifdef MEASURE_TEMP
-		for (uint8_t w = 0; w < 240; w++) delay(1000); // wait for 4min to cool down
+	else if (st_int == 2){
+		st_int = 0;
+//		digitalWrite(PIN_FLAG1, 1);
+    v1s += esp_adc_cal_raw_to_voltage(adc1_get_raw(ADC_CHANNEL), &adc1_chars);
+//		digitalWrite(PIN_FLAG1, 0);	
+		n++;
+		if (n == N)
+		{
+			n = 0;
+			v0 = v0s / N; v0s = 0;
+			v1 = v1s / N; v1s = 0;
 		}
-#endif
-		}
-		for (iTon = 0; iTon < 9; iTon++){
-			for (uint8_t f = 0; f < 2; f++){
-				Ton = iToni[iTon] * Ton0[f];
-				printf("%.2f,", (float)Ton/1000);
-				uint32_t s0 = 0, s1 = 0;
-				for (uint8_t ns = 0; ns < 5; ns++){
-					s0 += v[iTon][0][f][ns];
-					s1 += v[iTon][1][f][ns];
-				}
-				printf("%.2f,%.2f,", (float)s0/5.0, (float)s1/5.0);
-			}
-			for (uint8_t f = 0; f < 2; f++){
-				for (uint8_t ns = 0; ns < 5; ns++){
-					printf("%d,%d,", v[iTon][0][f][ns], v[iTon][1][f][ns]);
-				}
-			}
-			printf("\n");
-		}
-		
-		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0); // PWM OFF
-		fMeasure = 0;
-		M5.Display.clear(TFT_BLACK);
-		M5.Display.setCursor(0, 0);
-		M5.Display.printf("BtnA to start\n");
 	}
 }

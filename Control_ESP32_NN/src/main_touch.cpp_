@@ -13,7 +13,7 @@
 #include "soc/mcpwm_reg.h"
 #include "soc/mcpwm_struct.h"
 #include "driver/adc.h"
-#include "esp_adc_cal.h"
+#include "SliderUI.h"
 
 #include <Chirale_TensorFlowLite.h>
 
@@ -63,9 +63,6 @@ uint8_t tensor_arena[kTensorArenaSize];
 #error "No pin definition for this board"
 #endif
 
-static esp_adc_cal_characteristics_t adc1_chars;
-#define ADC_CALI_SCHEME     ESP_ADC_CAL_VAL_EFUSE_TP_FIT
-
 // memo: ADC_ATTEN_DB_11 == ADC_ATTEN_DB_12 (3)
 //   ref: https://docs.espressif.com/projects/esp-idf/en/release-v4.3/esp32c3/api-reference/peripherals/adc.html#_CPPv415ADC_ATTEN_DB_11
 
@@ -83,9 +80,6 @@ Solenoid sol;
 
 volatile SemaphoreHandle_t pwmSemaphore;
 volatile uint8_t st_int = 0;
-uint8_t iTon = 0;
-uint16_t xt, xt0;
-uint16_t pt, pt0;
 
 void IRAM_ATTR isr_handler(void *XX)
 {
@@ -101,6 +95,35 @@ void IRAM_ATTR isr_handler(void *XX)
 	xSemaphoreGiveFromISR(pwmSemaphore, NULL);
 	MCPWM0.int_clr.val = MCPWM0.int_st.val; // clear interrupt flags
 }
+
+void timer_task(void *pvParameters){
+	while(1){
+		if (xSemaphoreTake(pwmSemaphore, 0) == pdTRUE) {
+			if (st_int == 1){
+				// PWM=0->1
+				st_int = 0;
+				delayMicroseconds(100); // after 100us of PWM ON
+				digitalWrite(PIN_FLAG1, 1);
+    			v0_ = adc1_get_raw(ADC_CHANNEL);
+				digitalWrite(PIN_FLAG1, 0);	
+			}
+			else if (st_int == 2){
+				// 700us after PWM ON
+				st_int = 0;
+				digitalWrite(PIN_FLAG1, 1);
+    			v1 = adc1_get_raw(ADC_CHANNEL);
+				digitalWrite(PIN_FLAG1, 0);	
+				v0 = v0_;
+#ifndef TEST
+        printf("%d %.2f %.2f\n", millis(), St, sol.pos)
+#endif
+			}
+		}
+	}
+}
+
+static constexpr std::size_t slider_count = 2;
+static slider_t slider_list[slider_count];
 
 Solenoid predict(float Ton, float v0, float v1)
 {
@@ -120,70 +143,23 @@ Solenoid predict(float Ton, float v0, float v1)
 	return(s);
 }
 
-void timer_task(void *pvParameters){
-	while(1){
-#ifdef TEST
-		// for test, set Ton by Fader
-		printf("%d %d\n", analogReadMilliVolts(8),  analogReadMilliVolts(9));
-		Ton = (int)(analogReadMilliVolts(8) * 10000 / 3047); // 0-3047 -> 0-10000
-		M5.Display.fillRect(0, 40, 320, 20, TFT_BLACK);
-		M5.Display.setCursor(0, 40);
-		M5.Display.setTextColor(TFT_RED, TFT_BLACK);
-		M5.Display.printf("Ton:%d", Ton);
-		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton);
-#else
-	if (slider_list[0].update(t)) {
-		if (slider_list[0].wasChanged()) St = (float)(slider_list[0].getValue()) / 100;
-	}
-	if (slider_list[1].update(t)) {
-		if (slider_list[1].wasChanged()){
-			Kp = (float)(slider_list[1].getValue()) / 100;
-			M5.Display.fillRect(0, 40, 320, 20, TFT_BLACK);
-			M5.Display.setCursor(0, 40);
-			M5.Display.setTextColor(TFT_RED, TFT_BLACK);
-			M5.Display.printf("Kp:%.2f", Kp);
-		}
-	}
-#endif
-		// Position Measure
-//		sol = predict((float)Ton/1000.0, (float)v0, (float)v1);
-		M5.Display.fillRect(0, 1000, 320, 20, TFT_BLACK);
-		M5.Display.setCursor(0, 100);
-		M5.Display.setTextColor(TFT_CYAN, TFT_BLACK);
-		M5.Display.printf("S:%.3f / Temp:%.2f", sol.pos, sol.temp);
-
-#ifdef TEST
-//		printf("%d,%d,%d,%.3f\n", Ton, v0, v1, sol.pos); // for debug
-#else
-	// Position Control
-		int16_t dTon = (uint16_t)((St - sol.pos) * Kp);
-		int16_t Ton_t = Ton + dTon;
-#define Ton_MAX 9500
-#define Ton_MIN 1000
-		if (Ton_t > Ton_MAX) Ton = Ton_MAX;
-		else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
-		else Ton = Ton_t;
-		mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
-
-		xt = (uint16_t)((sol.pos / 5.0) * 320);
-		M5.Display.drawFastVLine(xt0, 100, 80, TFT_BLACK);
-		M5.Display.drawFastVLine(xt,	100, 80, TFT_GREEN);
-		pt = (uint16_t)(Ton * 32 / 950);
-		M5.Display.drawFastVLine(pt0, 80, 20, TFT_BLACK);
-		M5.Display.drawFastVLine(pt,	80, 20, TFT_CYAN);
-		xt0 = xt; pt0 = pt;
-#endif
-		delay(1);
-	}
-}
-
 void setup() {
 	M5.begin();
+
 	M5.Display.setTextSize(2);
+	// slider for St
+	slider_list[0].setup({0, 180, 320, 60}, 0,	500,	100, TFT_WHITE, TFT_BLACK, TFT_LIGHTGRAY);
+
+	// slider for Kp
+	slider_list[1].setup({0, 0, 320, 40}, 0,	1000,	(int)(Kp*100), TFT_RED, TFT_BLACK, TFT_RED);
+
+	M5.Display.setEpdMode(epd_mode_t::epd_fastest);
+	for (std::size_t i = 0; i < slider_count; ++i) slider_list[i].draw();
 
 	pwmSemaphore = xSemaphoreCreateBinary();
 
 	pinMode(PIN_FLAG1, OUTPUT); digitalWrite(PIN_FLAG1, 0);
+	pinMode(PIN_FLAG2, OUTPUT); digitalWrite(PIN_FLAG2, 0);
 	mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, PIN_PWM);
 
 	mcpwm_config_t pwm_config;
@@ -200,15 +176,6 @@ void setup() {
 	MCPWM0.int_ena.val |= BM_INT_OP0_TEB;
 	ESP_ERROR_CHECK(mcpwm_isr_register(MCPWM_UNIT_0, isr_handler, NULL, ESP_INTR_FLAG_IRAM, NULL));
 
-    esp_err_t ret;
-    ret = esp_adc_cal_check_efuse(ADC_CALI_SCHEME);
-    if (ret == ESP_ERR_NOT_SUPPORTED) {
-        ESP_LOGW(TAG, "Calibration scheme not supported, skip software calibration");
-    } else if (ret == ESP_ERR_INVALID_VERSION) {
-        ESP_LOGW(TAG, "eFuse not burnt, skip software calibration");
-    } else if (ret == ESP_OK) {
-        esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN, ADC_WIDTH_BIT_12, 0, &adc1_chars);
-	}
 	//ADC1 config
 	ESP_ERROR_CHECK(adc1_config_width(ADC_WIDTH_BIT_12));
 	ESP_ERROR_CHECK(adc1_config_channel_atten(ADC_CHANNEL, ADC_ATTEN));
@@ -248,20 +215,82 @@ void setup() {
  	xTaskCreateUniversal(timer_task, "task1", 8192, NULL, 2/*=priority*/,	NULL, PRO_CPU_NUM);
 }
 
+uint8_t iTon = 0;
+
+uint16_t xt, xt0;
+uint16_t pt, pt0;
+
 
 void loop() {
-	if (st_int == 1){
-		st_int = 0;
-		delayMicroseconds(100); // after 100us of PWM ON
-//		digitalWrite(PIN_FLAG1, 1);	
-	    v0_ = esp_adc_cal_raw_to_voltage(adc1_get_raw(ADC_CHANNEL), &adc1_chars);
-//		digitalWrite(PIN_FLAG1, 0);
+/*
+  printf("-----\n");
+	sol = predict(1.0, 327.75, 1003.6); printf("%.3f %.3f\n", sol.pos, sol.temp);
+	sol = predict(1.0, 307.6, 904.4); printf("%.3f %.3f\n", sol.pos, sol.temp);
+	sol = predict(1.0, 291.2, 810.6); printf("%.3f %.3f\n", sol.pos, sol.temp);
+  delay(1000);
+*/
+	// 1 cycle ~ 5ms
+	M5.update();
+
+
+
+	auto t = M5.Touch.getDetail();
+
+#ifdef TEST
+	// for test, set Ton by slider
+	if (slider_list[1].update(t)) {
+		if (slider_list[1].wasChanged()){
+			Ton = (float)(slider_list[1].getValue()) * 10; // slider:0-1000 -> 0-10000 (10ms)
+			M5.Display.fillRect(0, 40, 320, 20, TFT_BLACK);
+			M5.Display.setCursor(0, 40);
+			M5.Display.setTextColor(TFT_RED, TFT_BLACK);
+			M5.Display.printf("Ton:%d", Ton);
+			mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // 1ms, PWM ON
+		}
 	}
-	else if (st_int == 2){
-		st_int = 0;
-//		digitalWrite(PIN_FLAG1, 1);
-    	v1 = esp_adc_cal_raw_to_voltage(adc1_get_raw(ADC_CHANNEL), &adc1_chars);
-		v0 = v0_;
-//		digitalWrite(PIN_FLAG1, 0);	
+#else
+	if (slider_list[0].update(t)) {
+		if (slider_list[0].wasChanged()) St = (float)(slider_list[0].getValue()) / 100;
 	}
+	if (slider_list[1].update(t)) {
+		if (slider_list[1].wasChanged()){
+			Kp = (float)(slider_list[1].getValue()) / 100;
+			M5.Display.fillRect(0, 40, 320, 20, TFT_BLACK);
+			M5.Display.setCursor(0, 40);
+			M5.Display.setTextColor(TFT_RED, TFT_BLACK);
+			M5.Display.printf("Kp:%.2f", Kp);
+		}
+	}
+#endif
+	// Position Measure
+	sol = predict((float)Ton/1000.0, (float)v0, (float)v1);
+
+	M5.Display.fillRect(0, 1000, 320, 20, TFT_BLACK);
+	M5.Display.setCursor(0, 100);
+	M5.Display.setTextColor(TFT_CYAN, TFT_BLACK);
+	M5.Display.printf("S:%.3f / Temp:%.2f", sol.pos, sol.temp);
+
+#ifdef TEST
+	printf("%d,%d,%d,%.3f\n", Ton, v0, v1, sol.pos); // for debug
+#else
+	// Position Control
+	int16_t dTon = (uint16_t)((St - sol.pos) * Kp);
+	int16_t Ton_t = Ton + dTon;
+#define Ton_MAX 9500
+#define Ton_MIN 1000
+	if (Ton_t > Ton_MAX) Ton = Ton_MAX;
+	else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
+	else Ton = Ton_t;
+	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
+
+	xt = (uint16_t)((sol.pos / 5.0) * 320);
+	M5.Display.drawFastVLine(xt0, 100, 80, TFT_BLACK);
+	M5.Display.drawFastVLine(xt,	100, 80, TFT_GREEN);
+	pt = (uint16_t)(Ton * 32 / 950);
+	M5.Display.drawFastVLine(pt0, 80, 20, TFT_BLACK);
+	M5.Display.drawFastVLine(pt,	80, 20, TFT_CYAN);
+	xt0 = xt; pt0 = pt;
+#endif
+//	printf(">Pos:%f\n", sol.pos);	printf(">PosT:%f\n", St); // for Telepolot
+	delay(1);
 }
