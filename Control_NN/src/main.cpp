@@ -7,19 +7,25 @@
 // Copyright 2024 Chirale, TensorFlow Authors. All Rights Reserved.
 // Licensed under the Apache License, Version 2.0;
 
+#define MEASURE_TEMP // measure temp using KmeterISO UNIT
+
 #include <M5Unified.h>
 #include "SliderUI.h"
+#ifdef MEASURE_TEMP
+#include <M5_KMeter.h>
+M5_KMeter sensor;
+#endif
 
 #include <Chirale_TensorFlowLite.h>
 
-#include "model_SSBH-0830-CoreS3.h"	// generated model file
+#include "model_SSBH0830-100.h"	// generated model file
 
 #include "tensorflow/lite/micro/all_ops_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 
 // set PWM manually, and measure position. No control
-#define TEST
+// #define TEST
 
 const tflite::Model* model = nullptr;
 tflite::MicroInterpreter* interpreter = nullptr;
@@ -34,20 +40,29 @@ uint8_t tensor_arena[kTensorArenaSize];
 // for PortA
 #define PIN_TXD 32
 #define PIN_RXD 33
+#define PIN_SDA 14
+#define PIN_SCL 13
 
 #elif defined(ARDUINO_M5STACK_CORES3)
 // for CoreS3SE
 // for PortA
 #define PIN_TXD 2
 #define PIN_RXD 1
+#define PIN_FLAG1 6
+#define PIN_SDA 17
+#define PIN_SCL 18
 #else
 #error "No pin definition for this board"
 #endif
 
 uint16_t v0, v1;
-uint16_t Ton = 5000;
-float St = 1.0;
+uint16_t Ton = 1000;
+float pos_t = 1.0;
 float Kp = 9.0;
+#define BUF_LEN 64
+char buf[BUF_LEN];
+uint8_t pBuf = 0;
+uint8_t fValid = 0;
 
 typedef struct solenoid{
   float pos;
@@ -77,10 +92,34 @@ Solenoid predict(float Ton, float v0, float v1)
 	return(s);
 }
 
+/*
+// ref: https://moons.link/esp32/post-769/
+volatile SemaphoreHandle_t uartSemaphore;
+TaskHandle_t taskHandle[2];
+void uart_task(void *args){
+	while(1){
+	}
+}
+
+void CreateTasks(void *args) {
+	xTaskCreatePinnedToCore(uart_task, "uart_task", 4096, uartSemaphore, 2, &taskHandle[0], APP_CPU_NUM);
+	while(1);
+}
+*/
+
+uint32_t tm0;
+
 void setup() {
 	M5.begin();
 
 	Serial2.begin(115200, SERIAL_8N1, PIN_RXD, PIN_TXD);
+
+#ifdef MEASURE_TEMP
+  Wire.begin(PIN_SDA, PIN_SCL, 400000L); // SDA/SCL, for PortC (CoreS3)
+	sensor.begin(&Wire, 0x66);
+#endif
+
+	pinMode(PIN_FLAG1, OUTPUT);
 
 	M5.Display.setTextSize(2);
 	// slider for St
@@ -113,7 +152,6 @@ void setup() {
 	interpreter = &static_interpreter;
 
 	// Allocate memory from the tensor_arena for the model's tensors.
-	// if an error occurs, stop the program.
 	TfLiteStatus allocate_status = interpreter->AllocateTensors();
 	if (allocate_status != kTfLiteOk) {
 		printf("AllocateTensors() failed\n");
@@ -123,19 +161,27 @@ void setup() {
 	input = interpreter->input(0);
 	output = interpreter->output(0);
 
-	Serial2.println("START");
 	delay(1000);
 	Serial2.println("START");
+	Serial2.println("CYCLE1"); // PWM=100Hz -> every 10ms
+/*
+	disableCore0WDT();
+	uartSemaphore = xSemaphoreCreateBinary();
+	// assign timer_task to Core 0 (PRO) (usually used for radio tasks)
+//	xTaskCreateUniversal(uart_task, "task1", 8192, NULL, 2, NULL, PRO_CPU_NUM);
+ 	xSemaphoreGive(uartSemaphore);
+	xTaskCreatePinnedToCore(CreateTasks, "CreateTasks", 4096, NULL, 2, &taskHandle[0], PRO_CPU_NUM);
+*/
+	delay(1000);
+	Serial2.println("START");
+	Serial2.println("CYCLE1"); // PWM=100Hz -> every 10ms
+	tm0 = millis();
 }
 
 uint8_t iTon = 0;
 
 uint16_t xt, xt0;
 uint16_t pt, pt0;
-
-#define BUF_LEN 64
-char buf[BUF_LEN];
-uint8_t pBuf = 0;
 
 void loop() {
 	M5.update();
@@ -155,7 +201,7 @@ void loop() {
 	}
 #else
 	if (slider_list[0].update(t)) {
-		if (slider_list[0].wasChanged()) St = (float)(slider_list[0].getValue()) / 100;
+		if (slider_list[0].wasChanged()) pos_t = (float)(slider_list[0].getValue()) / 100;
 	}
 	if (slider_list[1].update(t)) {
 		if (slider_list[1].wasChanged()){
@@ -172,46 +218,59 @@ void loop() {
 		char c = Serial2.read();
 		if (c == '\n' || c == '\r'){
 			buf[pBuf] = '\0';
-			if (pBuf > 5){
+			if (pBuf == 9){
 				// 0000 0000
 				buf[4] = '\0';
 				v0 = atoi(buf);
 				v1 = atoi(buf + 5);
+				fValid = 1;
 			}
 			pBuf = 0;
 		}
 		else buf[pBuf++] = c;
 		if (pBuf == BUF_LEN) pBuf = 0;
 	}
-	// Position Measure
-	sol = predict((float)Ton/1000.0, (float)v0, (float)v1);
 
-	M5.Display.fillRect(0, 1000, 320, 20, TFT_BLACK);
-	M5.Display.setCursor(0, 100);
-	M5.Display.setTextColor(TFT_CYAN, TFT_BLACK);
-	M5.Display.printf("S:%.3f / Temp:%.2f", sol.pos, sol.temp);
-
-#ifdef TEST
-	printf("%d,%d,%d,%.3f\n", Ton, v0, v1, sol.pos); // for debug
-#else
-	// Position Control
-	int16_t dTon = (uint16_t)((St - sol.pos) * Kp);
-	int16_t Ton_t = Ton + dTon;
+	if (fValid == 1){
+		// Position Measure
+		digitalWrite(PIN_FLAG1, 1);
+		sol = predict((float)Ton/1000.0, (float)v0, (float)v1); // 0.5ms
+		digitalWrite(PIN_FLAG1, 0); // -1ms
+		if (sol.pos < 0) sol.pos = 0.0;
+		else if (sol.pos > 5.0) sol.pos = 5.0;
+		xt = (uint16_t)((sol.pos / 5.0) * 319);
+		M5.Display.drawFastVLine(xt0, 100, 80, TFT_BLACK);
+		M5.Display.drawFastVLine(xt,	100, 80, TFT_GREEN);
+		pt = (uint16_t)(Ton * 32 / 1000);
+		M5.Display.drawFastVLine(pt0, 80, 20, TFT_BLACK);
+		M5.Display.drawFastVLine(pt,	80, 20, TFT_CYAN);
+		xt0 = xt; pt0 = pt;
+		digitalWrite(PIN_FLAG1, 1); // 0.2us
+#ifndef TEST
+		// Position Control
+		int16_t dTon = (uint16_t)((pos_t - sol.pos) * Kp);
+		int16_t Ton_t = Ton + dTon;
 #define Ton_MAX 9500
 #define Ton_MIN 1000
-	if (Ton_t > Ton_MAX) Ton = Ton_MAX;
-	else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
-	else Ton = Ton_t;
-	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // set PWM
-
-	xt = (uint16_t)((sol.pos / 5.0) * 320);
-	M5.Display.drawFastVLine(xt0, 100, 80, TFT_BLACK);
-	M5.Display.drawFastVLine(xt,	100, 80, TFT_GREEN);
-	pt = (uint16_t)(Ton * 32 / 950);
-	M5.Display.drawFastVLine(pt0, 80, 20, TFT_BLACK);
-	M5.Display.drawFastVLine(pt,	80, 20, TFT_CYAN);
-	xt0 = xt; pt0 = pt;
+		if (Ton_t > Ton_MAX) Ton = Ton_MAX;
+		else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
+		else Ton = Ton_t;
+		Serial2.printf("PWMD%d\n", Ton); // set PWM
+#ifdef MEASURE_TEMP
+		sensor.update();
+		float temp = sensor.getTemperature();
 #endif
-//	printf(">Pos:%f\n", sol.pos);	printf(">PosT:%f\n", St); // for Telepolot
-	delay(1);
+		printf("%d %.3f %.3f %.3f %.3f\n", millis() - tm0, sol.pos, pos_t, sol.temp, temp);
+#endif
+		fValid = 0;
+		digitalWrite(PIN_FLAG1, 0); // -1.2ms in total
+	}
+/*
+	// spends -100ms?
+	M5.Display.fillRect(0, 100, 320, 40, TFT_BLACK);
+	M5.Display.setCursor(0, 100);
+	M5.Display.setTextColor(TFT_CYAN, TFT_BLACK);
+	M5.Display.printf("S:%.3f / Temp:%.2f\n", sol.pos, sol.temp);
+	M5.Display.printf("%4d %4d", v0, v1);
+*/
 }

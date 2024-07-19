@@ -34,7 +34,13 @@
 #define PIN_PWM 2
 #define PIN_ADC 1 // ADC1's Ch.0
 
+//#define PIN_RXD 38 // "PortB" of ExtPortForATOM
+//#define PIN_TXD 39 // "PortB" of ExtPortForATOM
+#define PIN_RXD 39 // "PortD" (blue) of ExtPortForATOM (ver0)
+#define PIN_TXD 7 // "PortD" (blue) of ExtPortForATOM (ver0)
+
 #define PIN_FLAG1 5
+
 #define ADC_CHANNEL	ADC1_CHANNEL_0 // GPIO1
 #define ADC_ATTEN   ADC_ATTEN_DB_12
 #define ADC_CALI_SCHEME     ESP_ADC_CAL_VAL_EFUSE_TP_FIT
@@ -123,7 +129,7 @@ void timer_task(void *pvParameters){
 void setup() {
 	M5.begin();
 	USBSerial.begin(115200);
-  	Serial2.begin(115200, SERIAL_8N1, 38, 39); // RX/TX = "PortB" of ExtPortForATOM
+  	Serial2.begin(115200, SERIAL_8N1, PIN_RXD, PIN_TXD);
 
 	Serial2.println("SolenoidMeasureControl v1.0\r\n");
 

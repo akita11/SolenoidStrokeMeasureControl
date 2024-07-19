@@ -2,7 +2,7 @@
 ## - 入力 : Ton, v0, v1, Posを含む測定データのExcelファイル
 ## - 出力 : TensorFlowLite for Microcontrollersで読み込むモデル(model.h)
 
-# pip install pandas scikit-learn tensorflow
+# pip install pandas scikit-learn tensorflow openpyxl
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -21,7 +21,7 @@ import numpy as np
 ### 使うデータのExcelファイル
 file_path = '学習用SSBH0830-01.xlsx'
 ### 学習回数
-Nepoch = 100
+Nepoch = 10000
 ################################3
 
 # データの読み込み
@@ -58,7 +58,7 @@ model.add(Dense(2))  # 出力層は2つの出力
 model.compile(optimizer='adam', loss='mean_squared_error')
 
 # モデルのトレーニング
-history = model.fit(x_train, y_train, epochs=20000, validation_split=0.2)
+history = model.fit(x_train, y_train, epochs=Nepoch, validation_split=0.2)
 
 # モデルの評価
 y_pred = model.predict(x_test)
@@ -96,10 +96,10 @@ header_file_content = f"""
 const unsigned char g_model[] = {{{hex_array}}};
 const int g_model_len = {len(tflite_model)};
 
-const scaler_x_mean={{ {scaler_x.mean_[0]}, {scaler_x.mean_[1]}, {scaler_x.mean_[2]} }};
-const scaler_x_scale={{ {scaler_x.scale_[0]}, {scaler_X.scale_[1]}, {scaler_x.scale_[2]} }};
-const scaler_y_mean={{ {scaler_y.mean_[0]}, {scaler_y.mean_[1]} }};
-const scaler_y_scale={{ {scaler_y.scale_[0]}, {scaler_y.scale_[1]} }};
+const float scaler_i_mean[] = {{ {scaler_x.mean_[0]}, {scaler_x.mean_[1]}, {scaler_x.mean_[2]} }};
+const float scaler_i_scale[] = {{ {scaler_x.scale_[0]}, {scaler_X.scale_[1]}, {scaler_x.scale_[2]} }};
+const float scaler_o_mean[] = {{ {scaler_y.mean_[0]}, {scaler_y.mean_[1]} }};
+const float scaler_o_scale[] = {{ {scaler_y.scale_[0]}, {scaler_y.scale_[1]} }};
 #endif  // MODEL_H
 """
 # ヘッダーファイルとして保存
