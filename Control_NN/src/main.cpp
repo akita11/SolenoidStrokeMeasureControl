@@ -18,8 +18,6 @@ M5_KMeter sensor;
 
 #include <Chirale_TensorFlowLite.h>
 
-#include "model_SSBH0830-100.h"	// generated model file
-
 #include "tensorflow/lite/micro/all_ops_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/schema/schema_generated.h"
