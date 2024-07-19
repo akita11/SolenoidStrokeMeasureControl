@@ -9,14 +9,12 @@
 
 #include <M5Unified.h>
 #include "SliderUI.h"
-
 #include <Chirale_TensorFlowLite.h>
-
-#include "model_SSBH-0830-CoreS3.h"	// generated model file
-
 #include "tensorflow/lite/micro/all_ops_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/schema/schema_generated.h"
+
+#include "model-CBS0730140-100Hz.h"	// generated model file
 
 // set PWM manually, and measure position. No control
 #define TEST
