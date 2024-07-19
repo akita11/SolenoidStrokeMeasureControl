@@ -59,15 +59,13 @@ M5_KMeter sensor;
 #define ADC_CHANNEL	ADC1_CHANNEL_0 // GPIO1
 #define ADC_ATTEN   ADC_ATTEN_DB_12
 #define ADC_CALI_SCHEME     ESP_ADC_CAL_VAL_EFUSE_TP_FIT
+#elif defined( ARDUINO_M5STACK_ATOMS3 )
 #endif
 
 uint8_t n = 0;
 uint8_t N = 16; 
 uint32_t v0s, v1s;
 uint16_t v0, v1;
-
-//uint16_t Ton = 1000;
-//uint16_t Delay = 100;
 
 uint16_t Ton0[] = {1000, 500}; // [us]
 uint16_t Tv1[] = {700, 400}; // [us]
@@ -230,16 +228,16 @@ void loop()
 	if (st_int == 1){
 		st_int = 0;
 		delayMicroseconds(100); // after 100us of PWM ON
-//		digitalWrite(PIN_FLAG1, 1);	
+		digitalWrite(PIN_FLAG1, 1);	
 //		v0s += analogReadMilliVolts(PIN_ADC); // cause jitter of ADC timing
     v0s += esp_adc_cal_raw_to_voltage(adc1_get_raw(ADC_CHANNEL), &adc1_chars);
-//		digitalWrite(PIN_FLAG1, 0);
+		digitalWrite(PIN_FLAG1, 0);
 	}
 	else if (st_int == 2){
 		st_int = 0;
-//		digitalWrite(PIN_FLAG1, 1);
+		digitalWrite(PIN_FLAG1, 1);
     v1s += esp_adc_cal_raw_to_voltage(adc1_get_raw(ADC_CHANNEL), &adc1_chars);
-//		digitalWrite(PIN_FLAG1, 0);	
+		digitalWrite(PIN_FLAG1, 0);	
 		n++;
 		if (n == N)
 		{
