@@ -25,19 +25,19 @@ Nepoch = 10000
 ################################3
 
 # データの読み込み
-file_path = '学習用SSBH-0830-CoreS3.xlsx'
+file_path = '学習用CBS0730140.xlsx'
 data = pd.read_excel(file_path)
 
 # 特徴量とターゲット変数を分ける
-#X = data[['Ton-100', 'v0-100', 'v1-100']].values # 100Hz
-x = data[['Ton-200', 'v0-200', 'v1-200']].values # 200Hz
+x = data[['Ton-100', 'v0-100', 'v1-100']].values # 100Hz
+#x = data[['Ton-200', 'v0-200', 'v1-200']].values # 200Hz
 y = data[['Pos[mm]', 'Temp[degC]']].values
 
 # データの標準化
 scaler_x = StandardScaler()
 scaler_y = StandardScaler()
 
-x_scaled = scaler_x.fit_transform(X)
+x_scaled = scaler_x.fit_transform(x)
 y_scaled = scaler_y.fit_transform(y)
 
 # データをトレーニングセットとテストセットに分割する

@@ -24,6 +24,8 @@ M5_KMeter sensor;
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 
+#include "model-CBS0730140-100Hz.h"	// generated model file
+
 // set PWM manually, and measure position. No control
 // #define TEST
 
