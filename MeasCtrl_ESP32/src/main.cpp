@@ -123,7 +123,7 @@ void timer_task(void *pvParameters){
 void setup() {
 	M5.begin();
 	USBSerial.begin(115200);
-  	Serial2.begin(115200, SERIAL_8N1, 38, 39); // RX/TX
+  	Serial2.begin(115200, SERIAL_8N1, 38, 39); // RX/TX = "PortB" of ExtPortForATOM
 
 	Serial2.println("SolenoidMeasureControl v1.0\r\n");
 
@@ -173,12 +173,12 @@ void loop()
 		char c = USBSerial.read();
 		if (c == '\n' || c == '\r'){
 			buf[pBuf] = '\0';
-			if (strncmp(buf, "MEASURE", 6) == 0){
+			if (strncmp(buf, "MEASURE", 7) == 0){
 				Serial2.printf("Measure start\r\n");
 				fMeasure = 1;
 			}
 			else{
-				if (pBuf > 0) Serial2.printf("?\r\n");
+				if (pBuf > 0) printf("?\r\n");
 			}
 			pBuf = 0;
 		}
@@ -189,16 +189,22 @@ void loop()
 		char c = Serial2.read();
 		if (c == '\n' || c == '\r'){
 			buf[pBuf] = '\0';
-			if (strncmp(buf, "MEASURE", 6) == 0){
+			if (strncmp(buf, "MEASURE", 7) == 0){
 				Serial2.printf("Measure start\r\n");
 				fMeasure = 1;
 			}
 			else if (strncmp(buf, "START", 5) == 0){
 				Serial2.printf("START / %d\r\n", Ncycle);
+				M5.Display.clear(TFT_GREEN);
+				M5.Display.setCursor(0, 0);
+				M5.Display.printf("Running\n");
 				fRun = 1;
 			}
 			else if (strncmp(buf, "STOP", 4) == 0){
 				Serial2.printf("STOP\r\n");
+				M5.Display.clear(TFT_BLACK);
+				M5.Display.setCursor(0, 0);
+				M5.Display.printf("Ready\n");
 				fRun = 0;
 			} 
 			else if (strncmp(buf, "PWMD", 4) == 0){
@@ -287,7 +293,7 @@ void loop()
 	if (fRun == 1){
 		if (fReady == 1){
 			fReady = 0;
-			Serial2.printf("%d %d\r\n", v0, v1);
+			Serial2.printf("%04d %04d\r\n", v0, v1);
 		}
 	}
 }

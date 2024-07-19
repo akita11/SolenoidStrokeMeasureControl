@@ -8,11 +8,6 @@
 // Licensed under the Apache License, Version 2.0;
 
 #include <M5Unified.h>
-#include "driver/gpio.h"
-#include "driver/mcpwm.h"
-#include "soc/mcpwm_reg.h"
-#include "soc/mcpwm_struct.h"
-#include "driver/adc.h"
 #include "SliderUI.h"
 
 #include <Chirale_TensorFlowLite.h>
@@ -34,39 +29,22 @@ TfLiteTensor* output = nullptr;
 constexpr int kTensorArenaSize = 4000;
 uint8_t tensor_arena[kTensorArenaSize];
 
-#define BM_INT_TIMER0_TEZ (1 << 3)
-#define BM_INT_OP0_TEA	(1 << 15)
-#define BM_INT_OP0_TEB	(1 << 18)
-
 #if defined(ARDUINO_M5STACK_CORE2)
 // for Core2
 // for PortA
-#define PIN_PWM 32
-#define PIN_ADC 33
-// for PortC
-#define PIN_FLAG1 13
-#define PIN_FLAG2 14
-#define ADC_CHANNEL	ADC1_CHANNEL_5 // 32K_XN / GPIO33
-#define ADC_ATTEN  ADC_ATTEN_DB_11
+#define PIN_TXD 32
+#define PIN_RXD 33
 
 #elif defined(ARDUINO_M5STACK_CORES3)
 // for CoreS3SE
 // for PortA
-#define PIN_PWM 2
-#define PIN_ADC 1 // ADC1's Ch.0
-// for PortC
-#define PIN_FLAG1 6
-#define PIN_FLAG2 7
-#define ADC_CHANNEL	ADC1_CHANNEL_0 // GPIO1
-#define ADC_ATTEN  ADC_ATTEN_DB_12
+#define PIN_TXD 2
+#define PIN_RXD 1
 #else
 #error "No pin definition for this board"
 #endif
 
-// memo: ADC_ATTEN_DB_11 == ADC_ATTEN_DB_12 (3)
-//   ref: https://docs.espressif.com/projects/esp-idf/en/release-v4.3/esp32c3/api-reference/peripherals/adc.html#_CPPv415ADC_ATTEN_DB_11
-
-uint16_t v0, v0_, v1;
+uint16_t v0, v1;
 uint16_t Ton = 5000;
 float St = 1.0;
 float Kp = 9.0;
@@ -77,50 +55,6 @@ typedef struct solenoid{
 } Solenoid;
 
 Solenoid sol;
-
-volatile SemaphoreHandle_t pwmSemaphore;
-volatile uint8_t st_int = 0;
-
-void IRAM_ATTR isr_handler(void *XX)
-{
-	if (MCPWM0.int_st.val & BM_INT_TIMER0_TEZ){
-		// interrupt of Timer0 == 0
-		st_int = 1;
-		}
-		else if (MCPWM0.int_st.val & BM_INT_OP0_TEB){
-		// interrupt of Timer0 == REGB
-		st_int = 2;
-	}
-	// other interrupt may occur, so don't make st_int=0
-	xSemaphoreGiveFromISR(pwmSemaphore, NULL);
-	MCPWM0.int_clr.val = MCPWM0.int_st.val; // clear interrupt flags
-}
-
-void timer_task(void *pvParameters){
-	while(1){
-		if (xSemaphoreTake(pwmSemaphore, 0) == pdTRUE) {
-			if (st_int == 1){
-				// PWM=0->1
-				st_int = 0;
-				delayMicroseconds(100); // after 100us of PWM ON
-				digitalWrite(PIN_FLAG1, 1);
-    			v0_ = adc1_get_raw(ADC_CHANNEL);
-				digitalWrite(PIN_FLAG1, 0);	
-			}
-			else if (st_int == 2){
-				// 700us after PWM ON
-				st_int = 0;
-				digitalWrite(PIN_FLAG1, 1);
-    			v1 = adc1_get_raw(ADC_CHANNEL);
-				digitalWrite(PIN_FLAG1, 0);	
-				v0 = v0_;
-#ifndef TEST
-        printf("%d %.2f %.2f\n", millis(), St, sol.pos)
-#endif
-			}
-		}
-	}
-}
 
 static constexpr std::size_t slider_count = 2;
 static slider_t slider_list[slider_count];
@@ -146,6 +80,8 @@ Solenoid predict(float Ton, float v0, float v1)
 void setup() {
 	M5.begin();
 
+	Serial2.begin(115200, SERIAL_8N1, PIN_RXD, PIN_TXD);
+
 	M5.Display.setTextSize(2);
 	// slider for St
 	slider_list[0].setup({0, 180, 320, 60}, 0,	500,	100, TFT_WHITE, TFT_BLACK, TFT_LIGHTGRAY);
@@ -155,30 +91,6 @@ void setup() {
 
 	M5.Display.setEpdMode(epd_mode_t::epd_fastest);
 	for (std::size_t i = 0; i < slider_count; ++i) slider_list[i].draw();
-
-	pwmSemaphore = xSemaphoreCreateBinary();
-
-	pinMode(PIN_FLAG1, OUTPUT); digitalWrite(PIN_FLAG1, 0);
-	pinMode(PIN_FLAG2, OUTPUT); digitalWrite(PIN_FLAG2, 0);
-	mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, PIN_PWM);
-
-	mcpwm_config_t pwm_config;
-	pwm_config.frequency = 100; // 100Hz,
-	pwm_config.cmpr_a = 0; // duty cycle for A
-	pwm_config.cmpr_b = 0; // duty cycle for B
-	pwm_config.counter_mode = MCPWM_UP_COUNTER;
-	pwm_config.duty_mode = MCPWM_DUTY_MODE_0; // active high
-	mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0,	&pwm_config);
-
-	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 1000); // 1ms, PWM ON
-	mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 700); // 700us
-	MCPWM0.int_ena.val |= BM_INT_TIMER0_TEZ;
-	MCPWM0.int_ena.val |= BM_INT_OP0_TEB;
-	ESP_ERROR_CHECK(mcpwm_isr_register(MCPWM_UNIT_0, isr_handler, NULL, ESP_INTR_FLAG_IRAM, NULL));
-
-	//ADC1 config
-	ESP_ERROR_CHECK(adc1_config_width(ADC_WIDTH_BIT_12));
-	ESP_ERROR_CHECK(adc1_config_channel_atten(ADC_CHANNEL, ADC_ATTEN));
 
 	// ------------------------------
 	// Setup TensorFlow Lite
@@ -211,8 +123,9 @@ void setup() {
 	input = interpreter->input(0);
 	output = interpreter->output(0);
 
-	disableCore0WDT();
- 	xTaskCreateUniversal(timer_task, "task1", 8192, NULL, 2/*=priority*/,	NULL, PRO_CPU_NUM);
+	Serial2.println("START");
+	delay(1000);
+	Serial2.println("START");
 }
 
 uint8_t iTon = 0;
@@ -220,22 +133,14 @@ uint8_t iTon = 0;
 uint16_t xt, xt0;
 uint16_t pt, pt0;
 
+#define BUF_LEN 64
+char buf[BUF_LEN];
+uint8_t pBuf = 0;
 
 void loop() {
-/*
-  printf("-----\n");
-	sol = predict(1.0, 327.75, 1003.6); printf("%.3f %.3f\n", sol.pos, sol.temp);
-	sol = predict(1.0, 307.6, 904.4); printf("%.3f %.3f\n", sol.pos, sol.temp);
-	sol = predict(1.0, 291.2, 810.6); printf("%.3f %.3f\n", sol.pos, sol.temp);
-  delay(1000);
-*/
-	// 1 cycle ~ 5ms
 	M5.update();
 
-
-
 	auto t = M5.Touch.getDetail();
-
 #ifdef TEST
 	// for test, set Ton by slider
 	if (slider_list[1].update(t)) {
@@ -245,7 +150,7 @@ void loop() {
 			M5.Display.setCursor(0, 40);
 			M5.Display.setTextColor(TFT_RED, TFT_BLACK);
 			M5.Display.printf("Ton:%d", Ton);
-			mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, Ton); // 1ms, PWM ON
+			Serial2.printf("PWMD%d\n", Ton);
 		}
 	}
 #else
@@ -262,6 +167,22 @@ void loop() {
 		}
 	}
 #endif
+
+	if (Serial2.available()){
+		char c = Serial2.read();
+		if (c == '\n' || c == '\r'){
+			buf[pBuf] = '\0';
+			if (pBuf > 5){
+				// 0000 0000
+				buf[4] = '\0';
+				v0 = atoi(buf);
+				v1 = atoi(buf + 5);
+			}
+			pBuf = 0;
+		}
+		else buf[pBuf++] = c;
+		if (pBuf == BUF_LEN) pBuf = 0;
+	}
 	// Position Measure
 	sol = predict((float)Ton/1000.0, (float)v0, (float)v1);
 
