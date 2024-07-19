@@ -122,7 +122,8 @@ void timer_task(void *pvParameters){
 
 void setup() {
 	M5.begin();
-	Serial2.begin(115200, SERIAL_8N1, 38, 39); // RX/TX
+	USBSerial.begin(115200);
+  	Serial2.begin(115200, SERIAL_8N1, 38, 39); // RX/TX
 
 	Serial2.println("SolenoidMeasureControl v1.0\r\n");
 
@@ -168,6 +169,22 @@ uint8_t st = 0;
 
 void loop()
 {
+	if (USBSerial.available()){
+		char c = USBSerial.read();
+		if (c == '\n' || c == '\r'){
+			buf[pBuf] = '\0';
+			if (strncmp(buf, "MEASURE", 6) == 0){
+				Serial2.printf("Measure start\r\n");
+				fMeasure = 1;
+			}
+			else{
+				if (pBuf > 0) Serial2.printf("?\r\n");
+			}
+			pBuf = 0;
+		}
+		else buf[pBuf++] = c;
+		if (pBuf == BUF_LEN) pBuf = 0;
+	}
 	if (Serial2.available()){
 		char c = Serial2.read();
 		if (c == '\n' || c == '\r'){
@@ -260,7 +277,7 @@ void loop()
 			}
 			printf("\n");
 		}
-		Serial.printf("Measure done\r\n");
+		Serial2.printf("Measure done\r\n");
 		SetPWM(0, Tcycle, Tv1s);
 		fMeasure = 0;
 		M5.Display.clear(TFT_BLACK);
