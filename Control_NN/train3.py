@@ -22,9 +22,9 @@ import numpy as np
 file_path = 'SolPosMeas240719.xlsx'
 sheet_name = '学習用CH1284123'
 ### 学習回数
-Nepoch = 10000
+Nepoch = 1000000
 ### PWM周波数
-PWMfreq = 200
+PWMfreq = 100
 ################################3
 
 # データの読み込み
@@ -107,5 +107,5 @@ const float scaler_o_scale[] = {{ {scaler_y.scale_[0]}, {scaler_y.scale_[1]} }};
 #endif  // MODEL_H
 """
 # ヘッダーファイルとして保存
-with open('model-{}.h'.format(PWMfreq), 'w') as f:
+with open('model-{}-1000000.h'.format(PWMfreq), 'w') as f:
     f.write(header_file_content)

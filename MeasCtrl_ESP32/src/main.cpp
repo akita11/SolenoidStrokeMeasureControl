@@ -183,6 +183,13 @@ void loop()
 				Serial2.printf("Measure start\r\n");
 				fMeasure = 1;
 			}
+			else if (strncmp(buf, "PWMD", 4) == 0){
+				// set PWM duty [us]
+				Ton = atoi(buf + 4);
+				Serial2.printf("Ton = %d\r\n", Ton);
+				printf("Ton=%d\n", Ton);
+				SetPWM(Ton, Tcycle, Tv1s);
+			}
 			else{
 				if (pBuf > 0) printf("?\r\n");
 			}
@@ -255,7 +262,7 @@ void loop()
 		uint16_t Ton;
 		for (uint8_t ns = 0; ns < N_SAMPLE; ns++){
 			for (uint8_t f = 0; f < 2; f++){
-				M5.Display.clear(TFT_BLACK);
+				M5.Display.clear(TFT_RED);
 				M5.Display.setCursor(0, 0);
 				M5.Display.printf("n=%d f=%d\n", ns, f);
 				for (iTon = 0; iTon < 9; iTon++){

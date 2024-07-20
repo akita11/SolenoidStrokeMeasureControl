@@ -7,7 +7,7 @@
 // Copyright 2024 Chirale, TensorFlow Authors. All Rights Reserved.
 // Licensed under the Apache License, Version 2.0;
 
-#define MEASURE_TEMP // measure temp using KmeterISO UNIT
+//#define MEASURE_TEMP // measure temp using KmeterISO UNIT
 
 #include <M5Unified.h>
 #include "SliderUI.h"
@@ -22,7 +22,10 @@ M5_KMeter sensor;
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 
-#include "model-CBS0730140-100Hz.h"	// generated model file
+// generated model file
+//#include "model-SSBH-0830-100.h"
+//#include "model-CBS0730140-100Hz.h"
+#include "model-CH1284123-100.h"
 
 // set PWM manually, and measure position. No control
 // #define TEST
@@ -56,7 +59,11 @@ uint8_t tensor_arena[kTensorArenaSize];
 #endif
 
 uint16_t v0, v1;
-uint16_t Ton = 1000;
+#ifdef TEST
+uint16_t Ton = 1000; // initial PWM duty for debugging
+#else
+uint16_t Ton = 5000;
+#endif
 float pos_t = 1.0;
 float Kp = 9.0;
 #define BUF_LEN 64
@@ -250,17 +257,19 @@ void loop() {
 		// Position Control
 		int16_t dTon = (uint16_t)((pos_t - sol.pos) * Kp);
 		int16_t Ton_t = Ton + dTon;
-#define Ton_MAX 9500
-#define Ton_MIN 1000
+ #define Ton_MAX 9500
+ #define Ton_MIN 1000
 		if (Ton_t > Ton_MAX) Ton = Ton_MAX;
 		else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
 		else Ton = Ton_t;
 		Serial2.printf("PWMD%d\n", Ton); // set PWM
-#ifdef MEASURE_TEMP
+ #ifdef MEASURE_TEMP
 		sensor.update();
 		float temp = sensor.getTemperature();
-#endif
 		printf("%d %.3f %.3f %.3f %.3f\n", millis() - tm0, sol.pos, pos_t, sol.temp, temp);
+ #else
+		printf("%d %.3f %.3f %.3f\n", millis() - tm0, sol.pos, pos_t, sol.temp);
+ #endif
 #endif
 		fValid = 0;
 		digitalWrite(PIN_FLAG1, 0); // -1.2ms in total
