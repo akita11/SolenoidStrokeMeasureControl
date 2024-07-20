@@ -7,7 +7,7 @@
 // Copyright 2024 Chirale, TensorFlow Authors. All Rights Reserved.
 // Licensed under the Apache License, Version 2.0;
 
-//#define MEASURE_TEMP // measure temp using KmeterISO UNIT
+#define MEASURE_TEMP // measure temp using KmeterISO UNIT
 
 #include <M5Unified.h>
 #include "SliderUI.h"
@@ -23,9 +23,9 @@ M5_KMeter sensor;
 #include "tensorflow/lite/schema/schema_generated.h"
 
 // generated model file
-//#include "model-SSBH-0830-100.h"
+#include "model-SSBH-0830-100.h"
 //#include "model-CBS0730140-100Hz.h"
-#include "model-CH1284123-100.h"
+//#include "model-CH1284123-100.h"
 
 // set PWM manually, and measure position. No control
 // #define TEST
@@ -179,6 +179,7 @@ void setup() {
  	xSemaphoreGive(uartSemaphore);
 	xTaskCreatePinnedToCore(CreateTasks, "CreateTasks", 4096, NULL, 2, &taskHandle[0], PRO_CPU_NUM);
 */
+
 	delay(1000);
 	Serial2.println("START");
 	Serial2.println("CYCLE1"); // PWM=100Hz -> every 10ms
