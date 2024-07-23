@@ -16,6 +16,11 @@
 M5_KMeter sensor;
 #endif
 
+// https://qiita.com/GOB/items/ccf0aec590d0fdd059ba
+#include <gob_unifiedButton.hpp>
+goblib::UnifiedButton unifiedButton;
+
+
 #include <Chirale_TensorFlowLite.h>
 
 #include "tensorflow/lite/micro/all_ops_resolver.h"
@@ -56,6 +61,7 @@ uint8_t tensor_arena[kTensorArenaSize];
 #define PIN_SDA 17
 #define PIN_SCL 18
 USBCDC USBSerial;
+
 #else
 #error "No pin definition for this board"
 #endif
@@ -120,6 +126,8 @@ uint32_t tm0;
 
 void setup() {
 	M5.begin();
+//  	unifiedButton.begin(&M5.Display);
+	unifiedButton.begin(&M5.Display, goblib::UnifiedButton::transparent_all);
 
 	Serial2.begin(115200, SERIAL_8N1, PIN_RXD, PIN_TXD);
 	// ToDo: to use getchar();
@@ -197,8 +205,18 @@ uint16_t pt, pt0;
 
 void loop() {
 	M5.update();
+	unifiedButton.update(); // M5.update() の後に呼ぶ事
+
+	if(M5.BtnA.wasPressed()){
+		Serial2.println("START");		
+	}
+	if(M5.BtnB.wasPressed()){
+		Serial2.println("STOP");		
+	}
+	unifiedButton.draw(); // ボタンを画面へ描画
 
 	auto t = M5.Touch.getDetail();
+	
 #ifdef TEST
 	// for test, set Ton by slider
 	if (slider_list[1].update(t)) {
