@@ -23,8 +23,8 @@ M5_KMeter sensor;
 #include "tensorflow/lite/schema/schema_generated.h"
 
 // generated model file
-#include "model-SSBH-0830-100.h"
-//#include "model-CBS0730140-100Hz.h"
+//#include "model-SSBH-0830-100.h"
+#include "model-CBS0730140-100Hz.h"
 //#include "model-CH1284123-100.h"
 
 // set PWM manually, and measure position. No control
@@ -52,8 +52,10 @@ uint8_t tensor_arena[kTensorArenaSize];
 #define PIN_TXD 2
 #define PIN_RXD 1
 #define PIN_FLAG1 6
+// for Port C
 #define PIN_SDA 17
 #define PIN_SCL 18
+USBCDC USBSerial;
 #else
 #error "No pin definition for this board"
 #endif
@@ -120,6 +122,8 @@ void setup() {
 	M5.begin();
 
 	Serial2.begin(115200, SERIAL_8N1, PIN_RXD, PIN_TXD);
+	// ToDo: to use getchar();
+	USBSerial.begin(115200);
 
 #ifdef MEASURE_TEMP
   Wire.begin(PIN_SDA, PIN_SCL, 400000L); // SDA/SCL, for PortC (CoreS3)
@@ -221,6 +225,15 @@ void loop() {
 		}
 	}
 #endif
+
+	if (USBSerial.available()){
+		char c = USBSerial.read();
+		if (c == '\n' || c == '\r'){
+			buf[pBuf] = '\0';
+			pos_t = atof(buf);
+			printf("pos_t:%.3f\n", pos_t);
+		}
+	}
 
 	if (Serial2.available()){
 		char c = Serial2.read();

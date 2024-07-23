@@ -129,7 +129,7 @@ void timer_task(void *pvParameters){
 void setup() {
 	M5.begin();
 	USBSerial.begin(115200);
-  	Serial2.begin(115200, SERIAL_8N1, PIN_RXD, PIN_TXD);
+  Serial2.begin(115200, SERIAL_8N1, PIN_RXD, PIN_TXD);
 
 	Serial2.println("SolenoidMeasureControl v1.0\r\n");
 
