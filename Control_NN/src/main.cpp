@@ -16,10 +16,6 @@
 M5_KMeter sensor;
 #endif
 
-// https://qiita.com/GOB/items/ccf0aec590d0fdd059ba
-#include <gob_unifiedButton.hpp>
-goblib::UnifiedButton unifiedButton;
-
 
 #include <Chirale_TensorFlowLite.h>
 
@@ -60,7 +56,7 @@ uint8_t tensor_arena[kTensorArenaSize];
 // for Port C
 #define PIN_SDA 17
 #define PIN_SCL 18
-USBCDC USBSerial;
+//USBCDC USBSerial;
 
 #else
 #error "No pin definition for this board"
@@ -126,15 +122,12 @@ uint32_t tm0;
 
 void setup() {
 	M5.begin();
-//  	unifiedButton.begin(&M5.Display);
-	unifiedButton.begin(&M5.Display, goblib::UnifiedButton::transparent_all);
 
 	Serial2.begin(115200, SERIAL_8N1, PIN_RXD, PIN_TXD);
-	// ToDo: to use getchar();
-	USBSerial.begin(115200);
+	Serial.begin(115200);
 
 #ifdef MEASURE_TEMP
-  Wire.begin(PIN_SDA, PIN_SCL, 400000L); // SDA/SCL, for PortC (CoreS3)
+  	Wire.begin(PIN_SDA, PIN_SCL, 400000L); // SDA/SCL, for PortC (CoreS3)
 	sensor.begin(&Wire, 0x66);
 #endif
 
@@ -193,7 +186,6 @@ void setup() {
 */
 
 	delay(1000);
-	Serial2.println("START");
 	Serial2.println("CYCLE1"); // PWM=100Hz -> every 10ms
 	tm0 = millis();
 }
@@ -202,21 +194,13 @@ uint8_t iTon = 0;
 
 uint16_t xt, xt0;
 uint16_t pt, pt0;
+volatile uint8_t fTouched = 0;
+volatile uint8_t fRun = 0;
 
 void loop() {
 	M5.update();
-	unifiedButton.update(); // M5.update() の後に呼ぶ事
-
-	if(M5.BtnA.wasPressed()){
-		Serial2.println("START");		
-	}
-	if(M5.BtnB.wasPressed()){
-		Serial2.println("STOP");		
-	}
-	unifiedButton.draw(); // ボタンを画面へ描画
-
 	auto t = M5.Touch.getDetail();
-	
+
 #ifdef TEST
 	// for test, set Ton by slider
 	if (slider_list[1].update(t)) {
@@ -243,15 +227,34 @@ void loop() {
 		}
 	}
 #endif
-
-	if (USBSerial.available()){
-		char c = USBSerial.read();
-		if (c == '\n' || c == '\r'){
-			buf[pBuf] = '\0';
-			pos_t = atof(buf);
-			printf("pos_t:%.3f\n", pos_t);
+	int tx, ty;
+	M5.Display.drawRect(140, 100, 40, 40, TFT_WHITE);
+	if (t.isPressed()){
+		tx = t.x; ty = t.y;
+		if (fTouched == 0){
+			if (140 < tx && tx < 180 && 100 < ty && ty < 140){
+				fTouched = 1;
+				fRun = 1 - fRun;
+				if (fRun == 1) Serial2.println("START");
+				else Serial2.println("STOP");
+				delay(1000);
+			}
 		}
 	}
+	if (fTouched == 1 && t.isReleased()) fTouched = 0;
+
+	if (Serial.available()){
+		char c = Serial.read();
+		if (c == '\n' || c == '\r'){
+			buf[pBuf] = '\0';
+			if (pBuf > 2){
+				pos_t = atof(buf);
+				printf("pos_t:%.3f\n", pos_t);
+			}
+			pBuf = 0;
+		}
+		else buf[pBuf++] = c;
+		if (pBuf == BUF_LEN) pBuf = 0;	}
 
 	if (Serial2.available()){
 		char c = Serial2.read();
@@ -304,7 +307,7 @@ void loop() {
  #endif
 #endif
 		fValid = 0;
-		digitalWrite(PIN_FLAG1, 0); // -1.2ms in total
+		digitalWrite(PIN_FLAG1, 0); // about 1.2ms in total
 	}
 /*
 	// spends -100ms?
