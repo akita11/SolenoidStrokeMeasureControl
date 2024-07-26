@@ -69,6 +69,7 @@ void setup() {
 	pinMode(PIN_FLAG1, OUTPUT); digitalWrite(PIN_FLAG1, LOW);
 	pinMode(PIN_LED, OUTPUT);
 	digitalWrite(PIN_LED, LOW);
+	pinMode(PIN_SW, INPUT_PULLUP);
 	Serial.begin(115200);
 	Serial.println("SolenoidMeasureControl v1.0");
 	// setup Timer1
@@ -135,6 +136,10 @@ void loop()
 		else buf[pBuf++] = c;
 		if (pBuf == BUF_LEN) pBuf = 0;
 	}
+	if (digitalRead(PIN_SW) == 0){
+		while(digitalRead(PIN_SW) == 0) delay(100);
+		fMeasure = 1;
+	}
 	#define N_SAMPLE 5
 	if (fMeasure == 1){
 		int v[9][2][2][5];
@@ -146,7 +151,7 @@ void loop()
 					digitalWrite(PIN_LED, 1 - digitalRead(PIN_LED));
 					Ton = iToni[iTon] * Ton0[f];
 					SetPWM(Ton, Ton0[f] * 10, Tv1[f]);
-					delay(1000);
+					delay(2000); // wait for transient
 					fReady = 0;
 					while(fReady == 0) delayMicroseconds(100);
 					v[iTon][0][f][ns] = v0;
