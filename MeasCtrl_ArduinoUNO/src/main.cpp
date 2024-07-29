@@ -76,6 +76,7 @@ void setup() {
 	TCCR1A = _BV(COM1A1) | _BV(WGM11);			  // Ch.A: non-inverting, WGM11=1 (mode14, Fast PWM)
 	TCCR1B = _BV(WGM13) | _BV(WGM12) | _BV(CS11); // WGM13:12=11, CS11=1 (16MHz/8 = 2MHz)
 
+	TCCR2B = 0x00; // stop Timer2
 	SetPWM(Ton, Tcycle, Tv1s);
 	// setup ADC
 	ADMUX = 0x40; // Ref=AVCC, LeftAdj=0, MUX=0
@@ -140,12 +141,15 @@ void loop()
 		while(digitalRead(PIN_SW) == 0) delay(100);
 		fMeasure = 1;
 	}
-	#define N_SAMPLE 5
+	#define N_SAMPLE 10
 	if (fMeasure == 1){
-		int v[9][2][2][5];
+		int v[9][2][2][N_SAMPLE];
 		uint8_t iTon;
 		uint16_t Ton;
 		for (uint8_t ns = 0; ns < N_SAMPLE; ns++){
+			for (uint8_t i = 0; i < ns + 1; i++){
+				digitalWrite(PIN_LED, 1); delay(100); digitalWrite(PIN_LED, 0); delay(100);
+			}
 			for (uint8_t f = 0; f < 2; f++){
 				for (iTon = 0; iTon < 9; iTon++){
 					digitalWrite(PIN_LED, 1 - digitalRead(PIN_LED));
