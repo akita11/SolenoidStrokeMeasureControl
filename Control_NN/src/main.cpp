@@ -16,7 +16,6 @@
 M5_KMeter sensor;
 #endif
 
-
 #include <Chirale_TensorFlowLite.h>
 
 #include "tensorflow/lite/micro/all_ops_resolver.h"
@@ -24,9 +23,10 @@ M5_KMeter sensor;
 #include "tensorflow/lite/schema/schema_generated.h"
 
 // generated model file
-//#include "model-SSBH-0830-100.h"
-#include "model-CBS0730140-100Hz.h"
-//#include "model-CH1284123-100.h"
+//#include "model-CH1284123-100-epoch1000.h" // Vs=12V, Rf=19.4k	
+//#include "model-CBS0730140100-epoch10000.h" // Vs=6V, Rf=38k
+//#include "model-CB10370380-100-epoch1000.h" // Vs=12V, Rf=38k	
+#include "model-SSBH-0830-100-epoch1000.h" // Vs=5V, Rf=19.4k
 
 // set PWM manually, and measure position. No control
 // #define TEST
@@ -127,7 +127,7 @@ void setup() {
 	Serial.begin(115200);
 
 #ifdef MEASURE_TEMP
-  	Wire.begin(PIN_SDA, PIN_SCL, 400000L); // SDA/SCL, for PortC (CoreS3)
+  Wire.begin(PIN_SDA, PIN_SCL, 400000L); // SDA/SCL, for PortC (CoreS3)
 	sensor.begin(&Wire, 0x66);
 #endif
 
@@ -188,6 +188,7 @@ void setup() {
 	delay(1000);
 	Serial2.println("CYCLE1"); // PWM=100Hz -> every 10ms
 	tm0 = millis();
+	M5.Display.fillRect(140, 100, 40, 40, TFT_GREEN);
 }
 
 uint8_t iTon = 0;
@@ -195,7 +196,7 @@ uint8_t iTon = 0;
 uint16_t xt, xt0;
 uint16_t pt, pt0;
 volatile uint8_t fTouched = 0;
-volatile uint8_t fRun = 0;
+volatile uint8_t fRun = 1;
 
 void loop() {
 	M5.update();
@@ -228,16 +229,24 @@ void loop() {
 	}
 #endif
 	int tx, ty;
-	M5.Display.drawRect(140, 100, 40, 40, TFT_WHITE);
+
 	if (t.isPressed()){
 		tx = t.x; ty = t.y;
 		if (fTouched == 0){
 			if (140 < tx && tx < 180 && 100 < ty && ty < 140){
 				fTouched = 1;
 				fRun = 1 - fRun;
-				if (fRun == 1) Serial2.println("START");
-				else Serial2.println("STOP");
-				delay(1000);
+				if (fRun == 1){
+					Serial2.println("START");
+					M5.Display.fillRect(140, 100, 40, 40, TFT_GREEN);
+					tm0 = millis();
+				}
+				else{
+					Serial2.println("STOP");
+					M5.Display.fillRect(140, 100, 40, 40, TFT_BLACK);
+					M5.Display.drawRect(140, 100, 40, 40, TFT_WHITE);
+				}
+				delay(500);
 			}
 		}
 	}
@@ -281,8 +290,8 @@ void loop() {
 		if (sol.pos < 0) sol.pos = 0.0;
 		else if (sol.pos > 5.0) sol.pos = 5.0;
 		xt = (uint16_t)((sol.pos / 5.0) * 319);
-		M5.Display.drawFastVLine(xt0, 100, 80, TFT_BLACK);
-		M5.Display.drawFastVLine(xt,	100, 80, TFT_GREEN);
+		M5.Display.drawFastVLine(xt0, 140, 40, TFT_BLACK);
+		M5.Display.drawFastVLine(xt,	140, 40, TFT_GREEN);
 		pt = (uint16_t)(Ton * 32 / 1000);
 		M5.Display.drawFastVLine(pt0, 80, 20, TFT_BLACK);
 		M5.Display.drawFastVLine(pt,	80, 20, TFT_CYAN);

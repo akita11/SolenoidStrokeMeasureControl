@@ -12,7 +12,7 @@ uint16_t v0, v1;
 
 uint16_t Ton0[] = {1000, 500}; // [us]
 uint16_t Tv1[] = {700, 400}; // [us]
-uint8_t iToni[] = {1, 9, 2, 8, 3, 7, 6, 4, 5};
+uint8_t iToni[] = {1, 9, 2, 8, 3, 7, 4, 6, 5};
 uint8_t fMeasure = 0;
 uint8_t fRun = 0;
 volatile uint8_t fReady = 0;
@@ -147,19 +147,22 @@ void loop()
 		uint8_t iTon;
 		uint16_t Ton;
 		for (uint8_t ns = 0; ns < N_SAMPLE; ns++){
-			for (uint8_t i = 0; i < ns + 1; i++){
-				digitalWrite(PIN_LED, 1); delay(100); digitalWrite(PIN_LED, 0); delay(100);
-			}
 			for (uint8_t f = 0; f < 2; f++){
 				for (iTon = 0; iTon < 9; iTon++){
-					digitalWrite(PIN_LED, 1 - digitalRead(PIN_LED));
 					Ton = iToni[iTon] * Ton0[f];
 					SetPWM(Ton, Ton0[f] * 10, Tv1[f]);
-					delay(2000); // wait for transient
+
+					// indicate #trial, and wait for transient
+					#define T_LED 50 // [ms], total transient wait = T_LED * N_SAMPLE (50*10 = 500ms)
+					digitalWrite(PIN_LED, 1); delay((ns + 1) * T_LED);
+					digitalWrite(PIN_LED, 0); delay((N_SAMPLE - 1 - ns) * T_LED);
+
 					fReady = 0;
-					while(fReady == 0) delayMicroseconds(100);
+					while(fReady == 0) delayMicroseconds(100); // wait for data ready
 					v[iTon][0][f][ns] = v0;
 					v[iTon][1][f][ns] = v1;
+					SetPWM(1, Tcycle, Tv1s);
+					//delay(2000); // wait for cool down, if needed
 				}
 			}
 		}
