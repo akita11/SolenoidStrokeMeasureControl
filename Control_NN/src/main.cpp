@@ -29,7 +29,7 @@ M5_KMeter sensor;
 #include "model-SSBH-0830-100-epoch1000.h" // Vs=5V, Rf=19.4k
 
 // set PWM manually, and measure position. No control
-// #define TEST
+//#define TEST
 
 const tflite::Model* model = nullptr;
 tflite::MicroInterpreter* interpreter = nullptr;
@@ -207,6 +207,7 @@ void loop() {
 	if (slider_list[1].update(t)) {
 		if (slider_list[1].wasChanged()){
 			Ton = (float)(slider_list[1].getValue()) * 10; // slider:0-1000 -> 0-10000 (10ms)
+			Ton = (Ton / 1000) * 1000; // quantize to 1ms
 			M5.Display.fillRect(0, 40, 320, 20, TFT_BLACK);
 			M5.Display.setCursor(0, 40);
 			M5.Display.setTextColor(TFT_RED, TFT_BLACK);
@@ -238,6 +239,9 @@ void loop() {
 				fRun = 1 - fRun;
 				if (fRun == 1){
 					Serial2.println("START");
+#ifdef TEST
+					Serial.println("START"); 
+#endif
 					M5.Display.fillRect(140, 100, 40, 40, TFT_GREEN);
 					tm0 = millis();
 				}
@@ -297,7 +301,15 @@ void loop() {
 		M5.Display.drawFastVLine(pt,	80, 20, TFT_CYAN);
 		xt0 = xt; pt0 = pt;
 		digitalWrite(PIN_FLAG1, 1); // 0.2us
-#ifndef TEST
+#ifdef TEST
+ #ifdef MEASURE_TEMP
+		sensor.update();
+		float temp = sensor.getTemperature();
+		printf("%d %d %.3f %.3f %.3f %.3f\n", millis() - tm0, Ton, sol.pos, pos_t, sol.temp, temp);
+ #else
+		printf("%d %d %.3f %.3f %.3f\n", millis() - tm0, Ton, sol.pos, pos_t, sol.temp);
+ #endif
+#else
 		// Position Control
 		int16_t dTon = (uint16_t)((pos_t - sol.pos) * Kp);
 		int16_t Ton_t = Ton + dTon;
