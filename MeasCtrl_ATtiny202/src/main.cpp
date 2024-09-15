@@ -52,6 +52,8 @@ ISR(ADC0_RESRDY_vect)
 //         CMP0 CMP1 CMP2    PER
 // ADC      |v0  |v1
 
+// f_cpu in platformio.ini : https://qiita.com/ji6czd/items/ed307a21541f906165a5
+
 #define F_CPU 10000000L // 20MHz / 2 = 10MHz
 //#define F_CPU 8000000L // 16MHz / 2 = 8MHz
 
