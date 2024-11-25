@@ -14,6 +14,16 @@
 #define pinRXD PIN_PA7
 
 uint16_t v0, v1;
+uint32_t v0s = 0, v1s = 0;
+uint8_t fMeasure = 0;
+uint16_t Ton = 1250; // 0.8[us] * 1250 = 1[ms]
+uint16_t Tcycle = 12500; // 0.8[us] * 12500 = 10[ms] / 100Hz
+uint16_t Tv0s = 125; // 0.8[us] * 125 = 100[us]
+uint16_t Tv1s = 875; // 0.8[us] * 875 = 700[us]
+uint8_t Ncycle = 10; // 100Hz / 10 = 10Hz
+uint8_t fRun = 0;
+uint8_t fReady = 0;
+uint8_t n = 0;
 
 #define RX_BUF_SIZE 64
 char rxBuf[RX_BUF_SIZE];
@@ -24,10 +34,14 @@ uint8_t p_rxBuf = 0;
 uint8_t p_rxBufRead = 0;
 
 // set PWM duty [*0.8us]
-void SetPWM(uint16_t duty)
+void setPWM(uint16_t Ton, uint16_t Tcycle, uint16_t Tv0s, uint16_t Tv1s)
 {
-	if (duty >= TCA0.SINGLE.PER) duty = TCA0.SINGLE.PER;
-	TCA0.SINGLE.CMP2 = duty;
+	if (Ton >= TCA0.SINGLE.PER) Ton = TCA0.SINGLE.PER;
+	if (Tcycle >= TCA0.SINGLE.PER) Tcycle = TCA0.SINGLE.PER;
+	TCA0.SINGLE.CMP0 = Tv0s - 1;
+	TCA0.SINGLE.CMP1 = Tv1s - 1;
+	TCA0.SINGLE.CMP2 = Ton - 1;
+	TCA0.SINGLE.PER = Tcycle - 1; // cycle=10000us=10ms (100Hz)
 }
 
 void putChar(char c){
@@ -86,7 +100,16 @@ ISR(TCA0_CMP1_vect)
   while(ADC0_COMMAND & ADC_STCONV_bm); // wait for conversion complete
   v1 = ADC0.RES;
 	digitalWrite(pinSW, 0);
-  TCA0.SINGLE.INTFLAGS = TCA_SINGLE_CMP1_bm; // clear interrupt flag
+	TCA0.SINGLE.INTFLAGS = TCA_SINGLE_CMP1_bm; // clear interrupt flag
+/*
+	n++;
+	if (n == Ncycle){
+		n = 0;
+		v0 = v0s / Ncycle; v0s = 0;
+		v1 = v1s / Ncycle; v1s = 0;
+		fReady = 1;
+	}
+*/
 }
 
 // Workflow
@@ -126,10 +149,7 @@ void setup() {
 	// TCA clock = fPER / 8 = 1.25MHz(0.8us)
 	TCA0.SINGLE.CTRLA = TCA_SINGLE_ENABLE_bm | TCA_SINGLE_CLKSEL_DIV8_gc; // enabel TCA, div=8
 	TCA0.SINGLE.CTRLB = TCA_SINGLE_CMP2EN_bm | TCA_SINGLE_WGMODE_SINGLESLOPE_gc; // enable WO2, single slope PWM
-	TCA0.SINGLE.PER = 12499; // cycle=10000us=10ms (100Hz)
-	TCA0.SINGLE.CMP0 = 124;  // 100us for v0
-	TCA0.SINGLE.CMP1 = 874; // 700us for v1
-	TCA0.SINGLE.CMP2 = 1249;   // PWM duty cycle
+	setPWM(Ton, Tcycle, Tv0s, Tv1s);
 
   // ADC converstion: 50us
 	ADC0_CTRLC = ADC_SAMPCAP_bm |	ADC_REFSEL_VDDREF_gc | ADC_PRESC_DIV16_gc; // ADC clock = fPER / 16 = 625kHz, Vref=VDD, small sampling capacitance
@@ -163,41 +183,43 @@ void loop() {
 		char c = getChar();
 		if (c == '\n' || c == '\r'){
 			buf[pBuf] = '\0';
-			if (strncmp(buf, "MEASURE", 7) == 0){
-				putString("Measure start\r\n");
-//				fMeasure = 1;
-			}
-/*
-			else if (strncmp(buf, "START", 5) == 0){
-				Serial.print("START / "); Serial.println(Ncycle);
+			if (strncmp(buf, "START", 5) == 0){
+				putString("START / "); putDec(Ncycle); putCRLF();
 				fRun = 1;
 			}
 			else if (strncmp(buf, "STOP", 4) == 0){
-				Serial.println("STOP");
+				putString("STOP\r\n");
 				fRun = 0;
 			} 
 			else if (strncmp(buf, "PWMD", 4) == 0){
 				// set PWM duty [us]
 				Ton = atoi(buf + 4);
-				Serial.print("Ton = "); Serial.println(Ton);
-				SetPWM(Ton, Tcycle, Tv1s);
+				putString("Ton = "); putDec(Ton); putCRLF();
+				setPWM(Ton, Tcycle, Tv0s, Tv1s);
 			}
 			else if (strncmp(buf, "PWMT", 4) == 0){
 				// set PWM cycle [us]
 				Tcycle = atoi(buf + 4);
-				Serial.print("Tcycle = "); Serial.println(Tcycle);
-				SetPWM(Ton, Tcycle, Tv1s);
+				putString("Tcycle = "); putDec(Tcycle); putCRLF();
+				setPWM(Ton, Tcycle, Tv0s, Tv1s);
+			}
+			else if (strncmp(buf, "TV0", 3) == 0){
+				// set V0 samling point
+				Tv0s = atoi(buf + 3);
+				putString("Tv0 = "); putDec(Tv0s); putCRLF();
+				setPWM(Ton, Tcycle, Tv0s, Tv1s);
 			}
 			else if (strncmp(buf, "TV1", 3) == 0){
 				// set V1 samling point
 				Tv1s = atoi(buf + 3);
-				Serial.print("Tv1 = "); Serial.println(Tv1s);
-				SetPWM(Ton, Tcycle, Tv1s);
+				putString("Tv1 = "); putDec(Tv1s); putCRLF();
+				setPWM(Ton, Tcycle, Tv0s, Tv1s);
 			}
+/*
 			else if (strncmp(buf, "CYCLE", 5) == 0){
 				// set output cycle [x PWMcycle]
 				Ncycle = atoi(buf + 5);
-				Serial.print("Ncycle = "); Serial.println(Ncycle);
+				putString("Ncycle = "); putDec(Ncycle); putCRLF();
 			}
 */
 			else{
@@ -208,4 +230,20 @@ void loop() {
 		else buf[pBuf++] = c;
 		if (pBuf == BUF_LEN) pBuf = 0;
   }
+	if (fRun == 1){
+		if (fReady == 1){
+			fReady = 0;
+			if (v0 < 1000) putChar('0');
+			if (v0 < 100) putChar('0');
+			if (v0 < 10) putChar('0');
+			putDec(v0);
+			putChar(' ');
+			if (v1 < 1000) putChar('0');
+			if (v1 < 100) putChar('0');
+			if (v1 < 10) putChar('0');
+			putDec(v1);
+			putCRLF();
+		}
+	}
 }
+
