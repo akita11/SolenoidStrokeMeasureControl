@@ -25,7 +25,7 @@ uint8_t fRun = 0;
 uint8_t fReady = 0;
 uint8_t n = 0;
 
-#define RX_BUF_SIZE 64
+#define RX_BUF_SIZE 16
 char rxBuf[RX_BUF_SIZE];
 #define BUF_LEN 32
 char buf[BUF_LEN];
@@ -37,7 +37,7 @@ uint8_t p_rxBufRead = 0;
 void setPWM(uint16_t Ton, uint16_t Tcycle, uint16_t Tv0s, uint16_t Tv1s)
 {
 	if (Ton >= TCA0.SINGLE.PER) Ton = TCA0.SINGLE.PER;
-	if (Tcycle >= TCA0.SINGLE.PER) Tcycle = TCA0.SINGLE.PER;
+//	if (Tcycle >= TCA0.SINGLE.PER) Tcycle = TCA0.SINGLE.PER;
 	TCA0.SINGLE.CMP0 = Tv0s - 1;
 	TCA0.SINGLE.CMP1 = Tv1s - 1;
 	TCA0.SINGLE.CMP2 = Ton - 1;
@@ -85,6 +85,7 @@ ISR(USART0_RXC_vect)
 
 ISR(TCA0_CMP0_vect)
 {
+	fReady = 0;
 	digitalWrite(pinSW, 1);
   ADC0_COMMAND = ADC_STCONV_bm; // start conversion
   while(ADC0_COMMAND & ADC_STCONV_bm); // wait for conversion complete
@@ -101,6 +102,7 @@ ISR(TCA0_CMP1_vect)
   v1 = ADC0.RES;
 	digitalWrite(pinSW, 0);
 	TCA0.SINGLE.INTFLAGS = TCA_SINGLE_CMP1_bm; // clear interrupt flag
+	fReady = 1;
 /*
 	n++;
 	if (n == Ncycle){
@@ -132,8 +134,8 @@ void setup() {
 	pinMode(pinSW, OUTPUT); // for debug
 
 	// setup UART
-	pinMode(pinTXD, OUTPUT);
-//	VPORTA_DIR |= PIN6_bm; //set pin 6 of PORT A (TXd) as output
+//	pinMode(pinTXD, OUTPUT);
+	VPORTA_DIR |= PIN6_bm; //set pin 6 of PORT A (TXd) as output
 	USART0_BAUD = (uint16_t)(USART0_BAUD_RATE(BAUDRATE)); // set baud rate
 	USART0_CTRLC = USART_CHSIZE0_bm | USART_CHSIZE1_bm; // N81N
 	USART0_CTRLB = USART_TXEN_bm | USART_RXEN_bm; // enable TX&RX
@@ -184,6 +186,7 @@ void loop() {
 		if (c == '\n' || c == '\r'){
 			buf[pBuf] = '\0';
 			if (strncmp(buf, "START", 5) == 0){
+				putChar('#');
 				putString("START / "); putDec(Ncycle); putCRLF();
 				fRun = 1;
 			}
@@ -192,13 +195,13 @@ void loop() {
 				fRun = 0;
 			} 
 			else if (strncmp(buf, "PWMD", 4) == 0){
-				// set PWM duty [us]
+				// set PWM duty
 				Ton = atoi(buf + 4);
 				putString("Ton = "); putDec(Ton); putCRLF();
 				setPWM(Ton, Tcycle, Tv0s, Tv1s);
 			}
 			else if (strncmp(buf, "PWMT", 4) == 0){
-				// set PWM cycle [us]
+				// set PWM cycle
 				Tcycle = atoi(buf + 4);
 				putString("Tcycle = "); putDec(Tcycle); putCRLF();
 				setPWM(Ton, Tcycle, Tv0s, Tv1s);
