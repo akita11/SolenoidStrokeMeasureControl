@@ -14,7 +14,7 @@
 #define pinRXD PIN_PA7
 
 uint16_t v0, v1;
-uint32_t v0s = 0, v1s = 0;
+uint16_t v0s = 0, v1s = 0;
 uint8_t fMeasure = 0;
 uint16_t Ton = 1250; // 0.8[us] * 1250 = 1[ms]
 uint16_t Tcycle = 12500; // 0.8[us] * 12500 = 10[ms] / 100Hz
@@ -25,9 +25,9 @@ uint8_t fRun = 0;
 uint8_t fReady = 0;
 uint8_t n = 0;
 
-#define RX_BUF_SIZE 16
+#define RX_BUF_SIZE 10
 char rxBuf[RX_BUF_SIZE];
-#define BUF_LEN 32
+#define BUF_LEN 16
 char buf[BUF_LEN];
 uint8_t pBuf = 0;
 uint8_t p_rxBuf = 0;
@@ -89,7 +89,7 @@ ISR(TCA0_CMP0_vect)
 	digitalWrite(pinSW, 1);
   ADC0_COMMAND = ADC_STCONV_bm; // start conversion
   while(ADC0_COMMAND & ADC_STCONV_bm); // wait for conversion complete
-  v0 = ADC0.RES;
+  v0s += ADC0.RES;
 	digitalWrite(pinSW, 0);
   TCA0.SINGLE.INTFLAGS = TCA_SINGLE_CMP0_bm; // clear interrupt flag
 }
@@ -99,11 +99,9 @@ ISR(TCA0_CMP1_vect)
 	digitalWrite(pinSW, 1);
   ADC0_COMMAND = ADC_STCONV_bm; // start conversion
   while(ADC0_COMMAND & ADC_STCONV_bm); // wait for conversion complete
-  v1 = ADC0.RES;
+  v1s += ADC0.RES;
 	digitalWrite(pinSW, 0);
 	TCA0.SINGLE.INTFLAGS = TCA_SINGLE_CMP1_bm; // clear interrupt flag
-	fReady = 1;
-/*
 	n++;
 	if (n == Ncycle){
 		n = 0;
@@ -111,7 +109,6 @@ ISR(TCA0_CMP1_vect)
 		v1 = v1s / Ncycle; v1s = 0;
 		fReady = 1;
 	}
-*/
 }
 
 // Workflow
@@ -173,8 +170,8 @@ void setup() {
 */
 	TCA0.SINGLE.INTCTRL = TCA_SINGLE_CMP0_bm | TCA_SINGLE_CMP1_bm; // enable interrupt of CMP0 & CMP1
 	interrupts(); // enable all interrupts
-  strcpy(buf,"SolPosMeasCtrl(ATtiny202) v1.0\r\n");
-  putString(buf);
+	strcpy(buf,"SolPos202v1.0\r\n");
+	putString(buf);
 }
 
 void loop() {
@@ -187,44 +184,42 @@ void loop() {
 			buf[pBuf] = '\0';
 			if (strncmp(buf, "START", 5) == 0){
 				putChar('#');
-				putString("START / "); putDec(Ncycle); putCRLF();
+//				putString("START / "); putDec(Ncycle); putCRLF();
 				fRun = 1;
 			}
 			else if (strncmp(buf, "STOP", 4) == 0){
-				putString("STOP\r\n");
+//				putString("STOP\r\n");
 				fRun = 0;
 			} 
 			else if (strncmp(buf, "PWMD", 4) == 0){
 				// set PWM duty
 				Ton = atoi(buf + 4);
-				putString("Ton = "); putDec(Ton); putCRLF();
+//				putString("Ton = "); putDec(Ton); putCRLF();
 				setPWM(Ton, Tcycle, Tv0s, Tv1s);
 			}
 			else if (strncmp(buf, "PWMT", 4) == 0){
 				// set PWM cycle
 				Tcycle = atoi(buf + 4);
-				putString("Tcycle = "); putDec(Tcycle); putCRLF();
+//				putString("Tcycle = "); putDec(Tcycle); putCRLF();
 				setPWM(Ton, Tcycle, Tv0s, Tv1s);
 			}
 			else if (strncmp(buf, "TV0", 3) == 0){
 				// set V0 samling point
 				Tv0s = atoi(buf + 3);
-				putString("Tv0 = "); putDec(Tv0s); putCRLF();
+				//putString("Tv0 = "); putDec(Tv0s); putCRLF();
 				setPWM(Ton, Tcycle, Tv0s, Tv1s);
 			}
 			else if (strncmp(buf, "TV1", 3) == 0){
 				// set V1 samling point
 				Tv1s = atoi(buf + 3);
-				putString("Tv1 = "); putDec(Tv1s); putCRLF();
+				//putString("Tv1 = "); putDec(Tv1s); putCRLF();
 				setPWM(Ton, Tcycle, Tv0s, Tv1s);
 			}
-/*
 			else if (strncmp(buf, "CYCLE", 5) == 0){
 				// set output cycle [x PWMcycle]
 				Ncycle = atoi(buf + 5);
-				putString("Ncycle = "); putDec(Ncycle); putCRLF();
+//				putString("Ncycle = "); putDec(Ncycle); putCRLF();
 			}
-*/
 			else{
 				if (pBuf > 0) putString("?\r\n");
 			}
