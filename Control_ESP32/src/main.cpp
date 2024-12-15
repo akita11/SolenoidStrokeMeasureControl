@@ -7,6 +7,8 @@
 // Copyright 2024 Chirale, TensorFlow Authors. All Rights Reserved.
 // Licensed under the Apache License, Version 2.0;
 
+// ToDo: change command for ATtiny202 (SolenoidStrokeUNIT)
+
 #define MEASURE_TEMP // measure temp using KmeterISO UNIT
 
 #include <M5Unified.h>

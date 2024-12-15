@@ -86,21 +86,19 @@ ISR(USART0_RXC_vect)
 ISR(TCA0_CMP0_vect)
 {
 	fReady = 0;
-	digitalWrite(pinSW, 1);
-  ADC0_COMMAND = ADC_STCONV_bm; // start conversion
-  while(ADC0_COMMAND & ADC_STCONV_bm); // wait for conversion complete
-  v0s += ADC0.RES;
-	digitalWrite(pinSW, 0);
-  TCA0.SINGLE.INTFLAGS = TCA_SINGLE_CMP0_bm; // clear interrupt flag
+	VPORTA_OUT |= PIN3_bm; // set PA3 (SW) as high
+	ADC0_COMMAND = ADC_STCONV_bm; // start conversion
+	while(ADC0_COMMAND & ADC_STCONV_bm); // wait for conversion complete
+	v0s += ADC0.RES;
+	TCA0.SINGLE.INTFLAGS = TCA_SINGLE_CMP0_bm; // clear interrupt flag
 }
 
 ISR(TCA0_CMP1_vect)
 {
-	digitalWrite(pinSW, 1);
-  ADC0_COMMAND = ADC_STCONV_bm; // start conversion
-  while(ADC0_COMMAND & ADC_STCONV_bm); // wait for conversion complete
-  v1s += ADC0.RES;
-	digitalWrite(pinSW, 0);
+	VPORTA_OUT &= ~PIN3_bm; // set PA3 (SW) as low
+	ADC0_COMMAND = ADC_STCONV_bm; // start conversion
+	while(ADC0_COMMAND & ADC_STCONV_bm); // wait for conversion complete
+	v1s += ADC0.RES;
 	TCA0.SINGLE.INTFLAGS = TCA_SINGLE_CMP1_bm; // clear interrupt flag
 	n++;
 	if (n == Ncycle){
@@ -126,12 +124,11 @@ ISR(TCA0_CMP1_vect)
 
 void setup() {
 	// fMAIN=10MHz @ OSC=20MHz
-  _PROTECTED_WRITE(CLKCTRL_MCLKCTRLB, (CLKCTRL_PEN_bm | CLKCTRL_PDIV_2X_gc));
+	_PROTECTED_WRITE(CLKCTRL_MCLKCTRLB, (CLKCTRL_PEN_bm | CLKCTRL_PDIV_2X_gc));
 //	pinMode(pinSW, INPUT_PULLUP); // for SW
 	pinMode(pinSW, OUTPUT); // for debug
 
 	// setup UART
-//	pinMode(pinTXD, OUTPUT);
 	VPORTA_DIR |= PIN6_bm; //set pin 6 of PORT A (TXd) as output
 	USART0_BAUD = (uint16_t)(USART0_BAUD_RATE(BAUDRATE)); // set baud rate
 	USART0_CTRLC = USART_CHSIZE0_bm | USART_CHSIZE1_bm; // N81N
@@ -150,9 +147,9 @@ void setup() {
 	TCA0.SINGLE.CTRLB = TCA_SINGLE_CMP2EN_bm | TCA_SINGLE_WGMODE_SINGLESLOPE_gc; // enable WO2, single slope PWM
 	setPWM(Ton, Tcycle, Tv0s, Tv1s);
 
-  // ADC converstion: 50us
+	// ADC converstion: 50us
 	ADC0_CTRLC = ADC_SAMPCAP_bm |	ADC_REFSEL_VDDREF_gc | ADC_PRESC_DIV16_gc; // ADC clock = fPER / 16 = 625kHz, Vref=VDD, small sampling capacitance
-  ADC0_CTRLA = ADC_RESSEL_10BIT_gc | ADC_ENABLE_bm; // 10bit resolution, enable ADC
+	ADC0_CTRLA = ADC_RESSEL_10BIT_gc | ADC_ENABLE_bm; // 10bit resolution, enable ADC
 	ADC0_MUXPOS = ADC_MUXPOS_AIN1_gc; // select AIN1 (PA1)
 
 /*
@@ -170,58 +167,59 @@ void setup() {
 */
 	TCA0.SINGLE.INTCTRL = TCA_SINGLE_CMP0_bm | TCA_SINGLE_CMP1_bm; // enable interrupt of CMP0 & CMP1
 	interrupts(); // enable all interrupts
-	strcpy(buf,"SolPos202v1.0\r\n");
-	putString(buf);
+	putString("SolStroke v1.0\r\n");
 }
 
 void loop() {
 	// delay(500); // delay uses TCA, don't use it
-  asm("nop"); // needed for UART receive?
-
+	asm("nop"); // needed for UART receive?
 	if (isRxAvailable()){
 		char c = getChar();
 		if (c == '\n' || c == '\r'){
 			buf[pBuf] = '\0';
-			if (strncmp(buf, "START", 5) == 0){
-				putChar('#');
-//				putString("START / "); putDec(Ncycle); putCRLF();
+//			if (strncmp(buf, "S", 1) == 0){
+			if (buf[0] == 'S'){
 				fRun = 1;
 			}
-			else if (strncmp(buf, "STOP", 4) == 0){
-//				putString("STOP\r\n");
+//			else if (strncmp(buf, "P", 1) == 0){
+			else if (buf[0] == 'P'){
 				fRun = 0;
 			} 
-			else if (strncmp(buf, "PWMD", 4) == 0){
+//			else if (strncmp(buf, "D", 1) == 0){
+			else if (buf[0] == 'D'){
 				// set PWM duty
-				Ton = atoi(buf + 4);
-//				putString("Ton = "); putDec(Ton); putCRLF();
+				Ton = atoi(buf + 1);
 				setPWM(Ton, Tcycle, Tv0s, Tv1s);
 			}
-			else if (strncmp(buf, "PWMT", 4) == 0){
+//			else if (strncmp(buf, "T", 1) == 0){
+			else if (buf[0] == 'T'){
 				// set PWM cycle
-				Tcycle = atoi(buf + 4);
-//				putString("Tcycle = "); putDec(Tcycle); putCRLF();
+				Tcycle = atoi(buf + 1);
+				putChar('T'); putDec(Ton); putCRLF();
 				setPWM(Ton, Tcycle, Tv0s, Tv1s);
 			}
-			else if (strncmp(buf, "TV0", 3) == 0){
+//			else if (strncmp(buf, "0", 1) == 0){
+			else if (buf[0] == '0'){
 				// set V0 samling point
-				Tv0s = atoi(buf + 3);
-				//putString("Tv0 = "); putDec(Tv0s); putCRLF();
+				Tv0s = atoi(buf + 1);
+				putChar('0'); putDec(Tv0s); putCRLF();
 				setPWM(Ton, Tcycle, Tv0s, Tv1s);
 			}
-			else if (strncmp(buf, "TV1", 3) == 0){
+//			else if (strncmp(buf, "1", 1) == 0){
+			else if (buf[0] == '1'){
 				// set V1 samling point
-				Tv1s = atoi(buf + 3);
-				//putString("Tv1 = "); putDec(Tv1s); putCRLF();
+				Tv1s = atoi(buf + 1);
+				putChar('1'); putDec(Tv1s); putCRLF();
 				setPWM(Ton, Tcycle, Tv0s, Tv1s);
 			}
-			else if (strncmp(buf, "CYCLE", 5) == 0){
+//			else if (strncmp(buf, "C", 1) == 0){
+			else if (buf[0] == 'C'){
 				// set output cycle [x PWMcycle]
-				Ncycle = atoi(buf + 5);
-//				putString("Ncycle = "); putDec(Ncycle); putCRLF();
+				Ncycle = atoi(buf + 1);
+				putChar('C'); putDec(Ncycle); putCRLF();
 			}
 			else{
-				if (pBuf > 0) putString("?\r\n");
+				if (pBuf > 0) putChar('?'); putCRLF();
 			}
 			pBuf = 0;
 		}
@@ -235,7 +233,6 @@ void loop() {
 			if (v0 < 100) putChar('0');
 			if (v0 < 10) putChar('0');
 			putDec(v0);
-			putChar(' ');
 			if (v1 < 1000) putChar('0');
 			if (v1 < 100) putChar('0');
 			if (v1 < 10) putChar('0');
