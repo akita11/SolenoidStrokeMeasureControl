@@ -1,5 +1,7 @@
 #include <M5Unified.h>
 
+// work with SolenoidStrokeUNIT v1.0 (with ATtiny202)
+
 #if defined(ARDUINO_M5STACK_CORE2)
 // for Core2
 // for PortA
@@ -11,8 +13,8 @@
 #elif defined(ARDUINO_M5STACK_CORES3)
 // for CoreS3SE
 // for PortA
-#define PIN_TXD 2
-#define PIN_RXD 1
+#define PIN_TXD 1
+#define PIN_RXD 2
 #define PIN_FLAG1 6
 // for Port C
 #define PIN_SDA 17
@@ -46,31 +48,52 @@ void setup() {
 
 	M5.Display.setTextSize(2);
 
+	delay(500);
+	Serial2.println("P");
+	Serial2.println("D1"); // PWM off (idle)
+
+	M5.Display.println("Touch to start");
 }
 
-#define N_SAMPLE 100
+#define N_SAMPLE 10
+
+void startMeasurement()
+{
+	M5.Display.clearDisplay();
+	M5.Display.setCursor(0, 0);
+	iTon = 0;
+	setPWM(iTon[iToni]); delay(100);
+	ns = 0; v0s = 0; v1s = 0;
+	Serial2.println('S');
+}
 
 void loop() {
 	M5.update();
+
+	auto t = M5.Touch.getDetail();
+	if (t.isPressed()){
+		startMeasurement();
+	}
 
 	if (fValid == 1){
 		v0s += v0; v1s += v1;
 		fValid = 0;
 		ns++;
 		if (ns == N_SAMPLE){
-			Serial2.print('P');
+			Serial2.println('P');
 			fValid = 0; // skip remaining data
 			while(fValid == 1) delay(10); // skip remaining data
-			Serial.printf("%d %.2f %.2f\n", iToni[iTon], (float)v0s / (float)N_SAMPLE, (float)0v1s / (float)N_SAMPLE);
+			Serial.printf("%d %.2f %.2f\n", iToni[iTon], (float)v0s / (float)N_SAMPLE, (float)v1s / (float)N_SAMPLE);
+			M5.Display.printf("%d %.2f %.2f\n", iToni[iTon], (float)v0s / (float)N_SAMPLE, (float)v1s / (float)N_SAMPLE);
 			ns = 0; v0s = 0; v1s = 0;
 			iTon++;
 			if (iTon == 9){
 				Serial2.println("P");
-				Serial2.printf("D1\n"); // PWM off (idle)
+				Serial2.println("D1"); // PWM off (idle)
 			}
 			else{
 				setPWM(iToni[iTon]);
-				Serial.println('S');
+				Serial2.println('S');
 			}
 		}
 	}
@@ -81,10 +104,7 @@ void loop() {
 		if (c == '\n' || c == '\r'){
 			buf[pBuf] = '\0';
 			if (buf[0] == 'S'){
-				iTon = 0;
-				setPWM(iTon[iToni]); delay(100);
-				ns = 0; v0s = 0; v1s = 0;
-				Serial2.println('P');
+				startMeasurement();
 			}
 			pBuf = 0;
 		}
@@ -96,7 +116,7 @@ void loop() {
 		char c = Serial2.read();
 		if (c == '\n' || c == '\r'){
 			buf[pBuf] = '\0';
-			if (pBuf == 9){
+			if (pBuf == 8){
 				// 11112222
 				v1 = atoi(buf + 4);
 				buf[4] = '\0';
