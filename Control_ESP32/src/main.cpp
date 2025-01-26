@@ -7,9 +7,7 @@
 // Copyright 2024 Chirale, TensorFlow Authors. All Rights Reserved.
 // Licensed under the Apache License, Version 2.0;
 
-// ToDo: change command for ATtiny202 (SolenoidStrokeUNIT)
-
-#define MEASURE_TEMP // measure temp using KmeterISO UNIT
+//#define MEASURE_TEMP // measure temp using KmeterISO UNIT
 
 #include <M5Unified.h>
 #include "SliderUI.h"
@@ -25,16 +23,14 @@ M5_KMeter sensor;
 #include "tensorflow/lite/schema/schema_generated.h"
 
 // generated model file
-#include "model-CH1284123-100-epoch1000.h" // Vs=12V, Rf=19.4k	
+//#include "model-CH1284123-100-epoch1000.h" // Vs=12V, Rf=19.4k	
 //#include "model-CBS0730140100-epoch10000.h" // Vs=6V, Rf=38k
 //#include "model-CB10370380-100-epoch1000.h" // Vs=12V, Rf=38k	
 //#include "model-SSBH-0830-100-epoch1000.h" // Vs=5V, Rf=19.4k
+#include "model-SSBH.h" // for SSBH-0830-02, PWM=200Hz, SolStrokeUnit (Rf=19.4kHz), Vs=5.0V
 
 // set PWM manually, and measure position. No control
-#define TEST
-
-// test for PWM=1-9ms, 100 samples
-#define TEST_ALL
+//#define TEST
 
 const tflite::Model* model = nullptr;
 tflite::MicroInterpreter* interpreter = nullptr;
@@ -47,16 +43,16 @@ uint8_t tensor_arena[kTensorArenaSize];
 #if defined(ARDUINO_M5STACK_CORE2)
 // for Core2
 // for PortA
-#define PIN_TXD 32
-#define PIN_RXD 33
+#define PIN_TXD 33
+#define PIN_RXD 32
 #define PIN_SDA 14
 #define PIN_SCL 13
 
 #elif defined(ARDUINO_M5STACK_CORES3)
 // for CoreS3SE
 // for PortA
-#define PIN_TXD 2
-#define PIN_RXD 1
+#define PIN_TXD 1
+#define PIN_RXD 2
 #define PIN_FLAG1 6
 // for Port C
 #define PIN_SDA 17
@@ -69,7 +65,7 @@ uint8_t tensor_arena[kTensorArenaSize];
 
 uint16_t v0, v1;
 #ifdef TEST
-uint16_t Ton = 1000; // initial PWM duty for debugging
+uint16_t Ton = 500; // initial PWM duty for debugging
 #else
 uint16_t Ton = 5000;
 #endif
@@ -151,11 +147,17 @@ void setup() {
 	pinMode(PIN_FLAG1, OUTPUT);
 
 	M5.Display.setTextSize(2);
+
+#ifdef TEST
+	// slider for PWM
+	slider_list[0].setup({0, 180, 320, 60}, 5,	100,	10, TFT_WHITE, TFT_BLACK, TFT_LIGHTGRAY);
+#else
 	// slider for St
 	slider_list[0].setup({0, 180, 320, 60}, 0,	500,	100, TFT_WHITE, TFT_BLACK, TFT_LIGHTGRAY);
 
 	// slider for Kp
 	slider_list[1].setup({0, 0, 320, 40}, 0,	1000,	(int)(Kp*100), TFT_RED, TFT_BLACK, TFT_RED);
+#endif
 
 	M5.Display.setEpdMode(epd_mode_t::epd_fastest);
 	for (std::size_t i = 0; i < slider_count; ++i) slider_list[i].draw();
@@ -191,8 +193,15 @@ void setup() {
 	output = interpreter->output(0);
 
 	delay(1000);
-	Serial2.println("START");
-	Serial2.println("CYCLE1"); // PWM=100Hz -> every 10ms
+	Serial2.println("D6250");
+	delay(100);
+	Serial2.println("T6250"); // PWM cycle=500us(200Hz)
+	delay(100);
+	Serial2.println("062"); // t0=49.6us(200Hz)
+	delay(100);
+	Serial2.println("1432"); // t1=345.6us(200Hz)
+	delay(100);
+	Serial2.println("D1");
 /*
 	disableCore0WDT();
 	uartSemaphore = xSemaphoreCreateBinary();
@@ -201,12 +210,12 @@ void setup() {
  	xSemaphoreGive(uartSemaphore);
 	xTaskCreatePinnedToCore(CreateTasks, "CreateTasks", 4096, NULL, 2, &taskHandle[0], PRO_CPU_NUM);
 */
-
+	Serial2.println("C1"); // PWM=100Hz -> every 10ms
 	delay(1000);
-	Serial2.println("CYCLE1"); // PWM=100Hz -> every 10ms
 	tm0 = millis();
 	if (fRun == 1){
 		M5.Display.fillRect(140, 100, 40, 40, TFT_GREEN);
+		Serial2.println("S");
 	}
 	else{
 		M5.Display.fillRect(140, 100, 40, 40, TFT_BLACK);
@@ -219,20 +228,13 @@ void loop() {
 	auto t = M5.Touch.getDetail();
 
 #ifdef TEST
-	#ifndef TEST_ALL
-	// for test, set Ton by slider
-	if (slider_list[1].update(t)) {
-		if (slider_list[1].wasChanged()){
-			Ton = (float)(slider_list[1].getValue()) * 10; // slider:0-1000 -> 0-10000 (10ms)
-			Ton = (Ton / 1000) * 1000; // quantize to 1ms
-			M5.Display.fillRect(0, 40, 320, 20, TFT_BLACK);
-			M5.Display.setCursor(0, 40);
-			M5.Display.setTextColor(TFT_RED, TFT_BLACK);
-			M5.Display.printf("Ton:%d", Ton);
-			Serial2.printf("PWMD%d\n", Ton);
+	if (slider_list[0].update(t)) {
+		if (slider_list[0].wasChanged()){
+			float duty = (float)(slider_list[0].getValue()) / 100;
+			Serial2.printf("D%d\n", (uint16_t)(duty * 6250));
+			Ton = (uint16_t)(duty * 5000); // Ton[us]
 		}
 	}
-	#endif
 #else
 	if (slider_list[0].update(t)) {
 		if (slider_list[0].wasChanged()) pos_t = (float)(slider_list[0].getValue()) / 100;
@@ -256,49 +258,25 @@ void loop() {
 				fTouched = 1;
 				fRun = 1 - fRun;
 				if (fRun == 1){
-					Serial2.println("START");
+					Serial2.println("S");
 #ifdef TEST
 					Serial.println("START"); 
-	#ifdef TEST_ALL
-					ns = 0;
-					iTon = 0;
-					Ton = iToni[iTon] * 1000;
-	#endif
 #endif
 					M5.Display.fillRect(140, 100, 40, 40, TFT_GREEN);
 					tm0 = millis();
-					Serial2.printf("PWMD%d\n", Ton); // set PWM
+					Serial2.printf("D%d\n", Ton); // set PWM
 				}
 				else{
-					Serial2.println("STOP");
+					Serial2.println("P");
 					M5.Display.fillRect(140, 100, 40, 40, TFT_BLACK);
 					M5.Display.drawRect(140, 100, 40, 40, TFT_WHITE);
-					Serial2.printf("PWMD1\n"); // PWM off (idle)
+					Serial2.println("D1"); // PWM off (idle)
 				}
 				delay(500);
 			}
 		}
 	}
 	if (fTouched == 1 && t.isReleased()) fTouched = 0;
-
-#ifdef TEST_ALL
-	if (ns >= 100){
-		ns = 0;
-		iTon++;
-		if (iTon == 9){
-			Serial2.println("STOP");
-			M5.Display.fillRect(140, 100, 40, 40, TFT_BLACK);
-			M5.Display.drawRect(140, 100, 40, 40, TFT_WHITE);
-			Serial2.printf("PWMD1\n"); // PWM off (idle)
-			Ton = 1;
-			fRun = 0;
-		}
-		else{
-			Ton = iToni[iTon] * 1000;
-			Serial2.printf("PWMD%d\n", Ton); // set PWM
-		}
-	}
-#endif
 
 	if (Serial.available()){
 		char c = Serial.read();
@@ -317,11 +295,11 @@ void loop() {
 		char c = Serial2.read();
 		if (c == '\n' || c == '\r'){
 			buf[pBuf] = '\0';
-			if (pBuf == 9){
-				// 0000 0000
+			if (pBuf == 8){
+				// 00001111
+				v1 = atoi(buf + 4);
 				buf[4] = '\0';
 				v0 = atoi(buf);
-				v1 = atoi(buf + 5);
 				fValid = 1;
 			}
 			pBuf = 0;
@@ -335,10 +313,8 @@ void loop() {
 		digitalWrite(PIN_FLAG1, 1);
 		sol = predict((float)Ton/1000.0, (float)v0, (float)v1); // 0.5ms
 		digitalWrite(PIN_FLAG1, 0); // -1ms
-#ifndef TEST_ALL
-		if (sol.pos < 0) sol.pos = 0.0;
-		else if (sol.pos > 5.0) sol.pos = 5.0;
-#endif
+//		if (sol.pos < 0) sol.pos = 0.0;
+//		else if (sol.pos > 5.0) sol.pos = 5.0;
 		xt = (uint16_t)((sol.pos / 5.0) * 319);
 		M5.Display.drawFastVLine(xt0, 140, 40, TFT_BLACK);
 		M5.Display.drawFastVLine(xt,	140, 40, TFT_GREEN);
@@ -351,27 +327,20 @@ void loop() {
  #ifdef MEASURE_TEMP
 		sensor.update();
 		float temp = sensor.getTemperature();
-	#ifdef TEST_ALL
-		printf("%d,%d,%.3f,---,%.3f,%.3f\n", ns, Ton, sol.pos, sol.temp, temp);
-	#else
-		printf("%d %d %.3f %.3f %.3f %.3f\n", millis() - tm0, Ton, sol.pos, pos_t, sol.temp, temp);
-	#endif
  #else
 		printf("%d %d %.3f %.3f %.3f\n", millis() - tm0, Ton, sol.pos, pos_t, sol.temp);
  #endif
-#ifdef TEST_ALL
-		ns++;
-#endif
 #else
 		// Position Control
 		int16_t dTon = (uint16_t)((pos_t - sol.pos) * Kp);
 		int16_t Ton_t = Ton + dTon;
- #define Ton_MAX 9500
- #define Ton_MIN 1000
+ #define Ton_MAX 4950 // 4.95[ms] for 200Hz
+ #define Ton_MIN  500 // 0.50[ms]for 200Hz
 		if (Ton_t > Ton_MAX) Ton = Ton_MAX;
 		else if (Ton_t < Ton_MIN) Ton = Ton_MIN;
 		else Ton = Ton_t;
-		Serial2.printf("PWMD%d\n", Ton); // set PWM
+		float duty = (float)Ton / 5000.0;
+		Serial2.printf("D%d\n", (uint16_t)(duty * 6250)); // set PWM
  #ifdef MEASURE_TEMP
 		sensor.update();
 		float temp = sensor.getTemperature();
@@ -383,12 +352,4 @@ void loop() {
 		fValid = 0;
 		digitalWrite(PIN_FLAG1, 0); // about 1.2ms in total
 	}
-/*
-	// spends -100ms?
-	M5.Display.fillRect(0, 100, 320, 40, TFT_BLACK);
-	M5.Display.setCursor(0, 100);
-	M5.Display.setTextColor(TFT_CYAN, TFT_BLACK);
-	M5.Display.printf("S:%.3f / Temp:%.2f\n", sol.pos, sol.temp);
-	M5.Display.printf("%4d %4d", v0, v1);
-*/
 }
